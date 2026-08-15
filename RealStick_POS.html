@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="RealStick POS">
+<title>RealStick™ — Billing & Management</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body,#root{height:100%;width:100%;overflow:hidden;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0D4F2E;}
+  #loading{position:fixed;inset:0;background:#0D4F2E;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;}
+  #loading .brand{font-size:40px;font-weight:700;color:#fff;font-family:Georgia,serif;letter-spacing:-2px;margin-bottom:8px;}
+  #loading .sub{font-size:12px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;}
+  #loading .dot{display:inline-block;animation:pulse 1.4s ease-in-out infinite;margin:0 2px;}
+  #loading .dot:nth-child(2){animation-delay:.2s;}
+  #loading .dot:nth-child(3){animation-delay:.4s;}
+  @keyframes pulse{0%,80%,100%{opacity:.3;}40%{opacity:1;}}
+  @media(max-width:600px){body{font-size:14px;}}
+  @media print{#root{overflow:visible !important;height:auto !important;}}
+</style>
+</head>
+<body>
+<div id="loading">
+  <div class="brand">RealStick™</div>
+  <div class="sub">Loading<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+</div>
+<div id="root"></div>
+
+<script type="text/babel">
+// ═══════════════════════════════════════════════════════════════
+// REALSTICK™ BILLING & MANAGEMENT SYSTEM v1.0
+// Shree Prakritik Foods LLP · Hyderabad
+// Built for: Multi-outlet franchise management with 3-tier access
+// Storage: localStorage (works on any device, any browser)
+// ═══════════════════════════════════════════════════════════════
+
+const { useState, useEffect, useCallback } = React;
+
+// BRAND
+const G='#1A7A4A',GM='#2E9E62',GL='#E6F4EC',GD='#0D4F2E';
+const OR='#E8621A',OL='#FFF0E8',NAVY='#1B3A6B';
+const DARK='#1A1A18',MID='#4A4A46',MUTED='#8A8A84';
+const BORDER='#E0DDD5',CREAM='#FDFAF4';
+
+const CATS=['All','Zest Collection','Garden Collection','Harvest Collection','The Reserve','Kulfi Heritage'];
+const CC={'Zest Collection':'#D97706','Garden Collection':'#EC4899','Harvest Collection':'#7C3AED','The Reserve':G,'Kulfi Heritage':OR,'All':MUTED};
+
+const MENU=[
+  {id:'z1',name:'Nimbu Pudina',sub:'Lemon & Fresh Mint',cat:'Zest Collection',price:20,emoji:'🍋',active:true},
+  {id:'z2',name:'Adrak Nimbu',sub:'Ginger, Lemon & Rock Salt',cat:'Zest Collection',price:20,emoji:'🫚',active:true},
+  {id:'z3',name:'Pure Lemon',sub:'Just lemon. Just sugar.',cat:'Zest Collection',price:20,emoji:'🍋',active:true},
+  {id:'z4',name:'Tarbuj & Kala Namak',sub:'Watermelon & Black Salt',cat:'Zest Collection',price:30,emoji:'🍉',active:true},
+  {id:'z5',name:'Ananas Chaat',sub:'Pineapple & Chaat Masala',cat:'Zest Collection',price:30,emoji:'🍍',active:true},
+  {id:'g1',name:'Nagpur Orange',sub:'Vidarbha orange, pressed',cat:'Garden Collection',price:40,emoji:'🍊',active:true},
+  {id:'g2',name:'Pink Guava & Spice',sub:'Pink guava, house spice blend',cat:'Garden Collection',price:40,emoji:'🍈',active:true},
+  {id:'g3',name:'Black Grape & Kokum',sub:'Nashik grapes, Konkan kokum',cat:'Garden Collection',price:40,emoji:'🍇',active:true},
+  {id:'g4',name:'Sunrise Papaya',sub:'Ripe papaya, squeeze of lime',cat:'Garden Collection',price:40,emoji:'🧡',active:true},
+  {id:'h1',name:'Rasaalu Mango',sub:'The sweet Telugu mango',cat:'Harvest Collection',price:50,emoji:'🥭',active:true},
+  {id:'h2',name:'Sitaphal',sub:'Custard apple, seasonal',cat:'Harvest Collection',price:60,emoji:'💚',active:true},
+  {id:'h3',name:'Chikku & Elaichi',sub:'Sapodilla, green cardamom',cat:'Harvest Collection',price:50,emoji:'🟤',active:true},
+  {id:'h4',name:'Kashmiri Apple Cream',sub:'Mountain apple, fresh cream',cat:'Harvest Collection',price:60,emoji:'🍎',active:true},
+  {id:'h5',name:'Nariyal Pani',sub:'Tender coconut, sourced daily',cat:'Harvest Collection',price:60,emoji:'🥥',active:true},
+  {id:'h6',name:'Red Banana & Malai',sub:'Red banana blended with cream',cat:'Harvest Collection',price:60,emoji:'🍌',active:true},
+  {id:'r1',name:'Mahabaleshwar Strawberry',sub:'Sahyadri hills, hand-sorted',cat:'The Reserve',price:70,emoji:'🍓',active:true},
+  {id:'r2',name:'Avocado & Himalayan Salt',sub:'Butter fruit, pink salt finish',cat:'The Reserve',price:80,emoji:'🥑',active:true},
+  {id:'r3',name:'Pitaya',sub:'Red dragon fruit, exotic',cat:'The Reserve',price:80,emoji:'🔴',active:true},
+  {id:'r4',name:'Wild Blueberry & Honey',sub:'Wild blueberry, raw honey',cat:'The Reserve',price:80,emoji:'🫐',active:true},
+  {id:'r5',name:'Kiwi & Fresh Mint',sub:'Green kiwi, garden mint',cat:'The Reserve',price:70,emoji:'🥝',active:true},
+  {id:'r6',name:'Lychee & Rose Water',sub:'Litchi, rose water',cat:'The Reserve',price:70,emoji:'🌸',active:true},
+  {id:'k1',name:'Malai Kulfi',sub:'Pure, unchanged, full-fat milk',cat:'Kulfi Heritage',price:40,emoji:'🍮',active:true},
+  {id:'k2',name:'Kesar & Pista',sub:'Kashmiri saffron, Afghani pistachio',cat:'Kulfi Heritage',price:40,emoji:'💛',active:true},
+  {id:'k3',name:'Mawa & Malai',sub:'Khoya and fresh cream',cat:'Kulfi Heritage',price:40,emoji:'⚪',active:true},
+  {id:'k4',name:'Kheer Kulfi',sub:'Rice kheer, frozen on a stick',cat:'Kulfi Heritage',price:40,emoji:'🍚',active:true},
+  {id:'k5',name:'Rabdi Kulfi',sub:'Slow-reduced, layered rabdi',cat:'Kulfi Heritage',price:50,emoji:'🥛',active:true},
+  {id:'k6',name:'Rajbhog Kulfi',sub:'Saffron-stuffed royal sweet',cat:'Kulfi Heritage',price:50,emoji:'🟠',active:true},
+  {id:'k7',name:'Rasmalai Kulfi',sub:'RealStick Original',cat:'Kulfi Heritage',price:50,emoji:'⭐',active:true},
+  {id:'k8',name:'Badam & Elaichi',sub:'Almonds, green cardamom',cat:'Kulfi Heritage',price:50,emoji:'🥜',active:true},
+];
+
+const INIT_USERS=[
+  {id:'u1',name:'Rajender Reddy',email:'admin@realstick.in',pwd:'admin@2025',role:'llp_admin',outletId:null,active:true},
+  {id:'u2',name:'Chatla Kiran',email:'kiran@realstick.in',pwd:'kiran@2025',role:'llp_admin',outletId:null,active:true},
+  {id:'u3',name:'Outlet Owner',email:'owner@realstick.in',pwd:'owner@2025',role:'franchise_owner',outletId:'o1',active:true},
+  {id:'u4',name:'Cashier One',email:'cashier@realstick.in',pwd:'cashier@2025',role:'cashier',outletId:'o1',active:true},
+];
+const INIT_OUTLETS=[
+  {id:'o1',name:'Hyderabad — Main Store',address:'Shop 2 & 3, [Your Address], Hyderabad',city:'Hyderabad',state:'Telangana',tier:'Founder',status:'active',ownerEmail:'owner@realstick.in',openDate:'2026-08-25'},
+];
+const DISC=[{id:'d1',name:'Launch Special (B2G1)',pct:33},{id:'d2',name:'Family Pack 35%',pct:35},{id:'d3',name:'Staff Meal 50%',pct:50},{id:'d4',name:'Influencer / PR',pct:100}];
+
+// STORAGE — uses localStorage (works on any browser, any device)
+const gs=k=>{try{const v=localStorage.getItem('rs_'+k);return v?JSON.parse(v):null;}catch(e){return null;}};
+const ss=(k,v)=>{try{localStorage.setItem('rs_'+k,JSON.stringify(v));}catch(e){}};
+
+function initDB(){
+  if(!gs('users')){
+    ss('users',INIT_USERS);ss('outlets',INIT_OUTLETS);
+    ss('menu',MENU);ss('sales',[]);ss('audits',[]);ss('billcount',0);
+  }
+}
+
+// UTILS
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).substr(2,5);
+const todayStr=()=>new Date().toISOString().split('T')[0];
+const fmtINR=n=>`₹${Math.round(n||0).toLocaleString('en-IN')}`;
+const fmtTime=d=>new Date(d).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+const fmtDate=d=>new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
+const roleLabel=r=>r==='llp_admin'?'LLP Admin':r==='franchise_owner'?'Franchise Owner':'Cashier';
+
+// MICRO COMPONENTS
+const Btn=({children,onClick,color=G,small,outline,disabled,style={},...r})=>(
+  <button onClick={onClick} disabled={disabled} style={{background:outline?'transparent':disabled?MUTED:color,color:outline?color:'#fff',border:outline?`2px solid ${color}`:'none',borderRadius:8,padding:small?'7px 14px':'10px 20px',fontSize:small?13:14,fontWeight:600,cursor:disabled?'not-allowed':'pointer',opacity:disabled?.6:1,fontFamily:'inherit',...style}} {...r}>{children}</button>
+);
+const Inp=({style={},label,...r})=>(
+  <div style={{marginBottom:12}}>
+    {label&&<div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>{label}</div>}
+    <input style={{width:'100%',padding:'10px 12px',borderRadius:8,border:`1px solid ${BORDER}`,fontSize:14,fontFamily:'inherit',outline:'none',background:'#fff',...style}} {...r}/>
+  </div>
+);
+const Badge=({children,color=G})=>(
+  <span style={{display:'inline-block',background:color,color:'#fff',fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:99,letterSpacing:'.05em'}}>{children}</span>
+);
+const StatCard=({label,value,sub,color=G,icon})=>(
+  <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:12,padding:'16px 18px',borderTop:`3px solid ${color}`}}>
+    <div style={{fontSize:11,color:MUTED,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:5}}>{icon} {label}</div>
+    <div style={{fontSize:24,fontWeight:700,color:DARK,fontFamily:'Georgia,serif',letterSpacing:'-1px'}}>{value}</div>
+    {sub&&<div style={{fontSize:11,color:MUTED,marginTop:3}}>{sub}</div>}
+  </div>
+);
+const Modal=({title,children,onClose,wide})=>(
+  <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{background:'#fff',borderRadius:16,width:'100%',maxWidth:wide?660:420,maxHeight:'90vh',overflow:'auto',boxShadow:'0 8px 40px rgba(0,0,0,.25)'}}>
+      <div style={{padding:'16px 20px',borderBottom:`1px solid ${BORDER}`,display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,background:'#fff',zIndex:1}}>
+        <div style={{fontWeight:700,fontSize:15,color:DARK}}>{title}</div>
+        <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:MUTED,lineHeight:1}}>×</button>
+      </div>
+      <div style={{padding:'18px 20px'}}>{children}</div>
+    </div>
+  </div>
+);
+const Sidebar=({items,active,onNav,user,onLogout})=>(
+  <div style={{width:210,background:GD,height:'100vh',display:'flex',flexDirection:'column',flexShrink:0,overflowY:'auto'}}>
+    <div style={{padding:'20px 14px 14px'}}>
+      <div style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:'#fff',letterSpacing:'-.5px',marginBottom:2}}>RealStick™</div>
+      <div style={{fontSize:9,color:'rgba(255,255,255,.35)',letterSpacing:'.12em',textTransform:'uppercase'}}>Billing & Management</div>
+    </div>
+    <div style={{padding:'6px 8px',flex:1}}>
+      {items.map(it=>(
+        <button key={it.id} onClick={()=>onNav(it.id)} style={{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'9px 11px',background:active===it.id?'rgba(255,255,255,.13)':'transparent',border:'none',borderRadius:8,cursor:'pointer',marginBottom:2,color:active===it.id?'#fff':'rgba(255,255,255,.5)',fontSize:13,fontWeight:active===it.id?600:400,textAlign:'left',fontFamily:'inherit'}}>
+          <span style={{fontSize:15}}>{it.icon}</span>{it.label}
+        </button>
+      ))}
+    </div>
+    <div style={{padding:'10px 14px',borderTop:'1px solid rgba(255,255,255,.1)'}}>
+      <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:1}}>{user.name}</div>
+      <div style={{fontSize:9,color:'rgba(255,255,255,.25)',marginBottom:7}}>{roleLabel(user.role)}</div>
+      <button onClick={onLogout} style={{fontSize:11,color:'rgba(255,255,255,.35)',background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>Sign out →</button>
+    </div>
+  </div>
+);
+
+// RECEIPT PRINT
+function printReceipt(sale,outlet){
+  const w=window.open('','_blank','width=380,height=580');
+  if(!w)return;
+  const items=sale.items.map(i=>`<tr><td style="padding:3px 0">${i.name}</td><td style="text-align:center">×${i.qty}</td><td style="text-align:right">₹${i.price*i.qty}</td></tr>`).join('');
+  w.document.write(`<!DOCTYPE html><html><head><title>RealStick Receipt</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;width:280px;margin:0 auto;padding:8px}.center{text-align:center}.brand{font-size:18px;font-weight:bold;color:#1A7A4A}hr{border:none;border-top:1px dashed #ccc;margin:6px 0}table{width:100%;border-collapse:collapse}td{vertical-align:top}.total{font-weight:bold;font-size:14px}.footer{font-size:10px;color:#888}@media print{body{width:280px}@page{margin:0;size:80mm auto}}</style></head><body><div class="center"><div class="brand">RealStick™</div><div>Natural Popsicles & Kulfi</div><div>${outlet?.name||'Hyderabad Main'}</div><div>realstick.in</div></div><hr/><div>Bill No: ${sale.billNo}</div><div>Date: ${new Date(sale.createdAt).toLocaleDateString('en-IN')}</div><div>Time: ${fmtTime(sale.createdAt)}</div><div>Staff: ${sale.cashierName}</div><hr/><table>${items}</table><hr/><table><tr><td>Subtotal</td><td></td><td style="text-align:right">₹${sale.subtotal}</td></tr>${sale.discount>0?`<tr><td>Discount</td><td></td><td style="text-align:right">-₹${sale.discount}</td></tr>`:''}<tr class="total"><td>TOTAL</td><td></td><td style="text-align:right">₹${sale.total}</td></tr><tr><td>${sale.paymentMethod}</td><td></td><td style="text-align:right">₹${sale.total}</td></tr></table><hr/><div class="center footer"><div>Real Fruits. Real Goodness.</div><div>Zero Artificial · Zero Preservatives</div><div>Thank you! Visit again 🍡</div></div></body></html>`);
+  w.document.close();setTimeout(()=>w.print(),400);
+}
+
+// ═══ POS ═════════════════════════════════════════════════════
+function POS({user,outlet}){
+  const [cat,setCat]=useState('All');
+  const [cart,setCart]=useState([]);
+  const [menu,setMenu]=useState(MENU);
+  const [discPct,setDiscPct]=useState(0);
+  const [discLabel,setDiscLabel]=useState('');
+  const [customDisc,setCustomDisc]=useState('');
+  const [pay,setPay]=useState('UPI');
+  const [phone,setPhone]=useState('');
+  const [billCount,setBillCount]=useState(0);
+  const [ok,setOk]=useState(false);
+  const [search,setSearch]=useState('');
+
+  useEffect(()=>{
+    const m=gs('menu');if(m)setMenu(m);
+    const n=gs('billcount');if(n!==null)setBillCount(n);
+  },[]);
+
+  const vis=menu.filter(i=>i.active&&(cat==='All'||i.cat===cat)&&(!search||i.name.toLowerCase().includes(search.toLowerCase())));
+  const add=item=>setCart(p=>{const e=p.find(c=>c.id===item.id);return e?p.map(c=>c.id===item.id?{...c,qty:c.qty+1}:c):[...p,{...item,qty:1}];});
+  const upd=(id,d)=>setCart(p=>p.map(c=>c.id===id?{...c,qty:Math.max(0,c.qty+d)}:c).filter(c=>c.qty>0));
+  const sub=cart.reduce((s,i)=>s+i.price*i.qty,0);
+  const disc=Math.round(sub*discPct/100);
+  const total=sub-disc;
+
+  const bill=()=>{
+    if(!cart.length)return;
+    const nc=billCount+1;
+    const sale={id:uid(),billNo:`RS-${String(nc).padStart(4,'0')}`,outletId:user.outletId||'o1',cashierId:user.id,cashierName:user.name,items:cart,subtotal:sub,discount:disc,discountLabel:discLabel||'',total,paymentMethod:pay,phone,createdAt:new Date().toISOString(),date:todayStr()};
+    const sales=gs('sales')||[];ss('sales',[...sales,sale]);ss('billcount',nc);setBillCount(nc);
+    printReceipt(sale,outlet);
+    setCart([]);setDiscPct(0);setDiscLabel('');setPhone('');setCustomDisc('');
+    setOk(true);setTimeout(()=>setOk(false),3000);
+  };
+
+  return(
+    <div style={{display:'flex',height:'100%',overflow:'hidden'}}>
+      {/* LEFT MENU */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',background:CREAM,overflow:'hidden'}}>
+        <div style={{background:'#fff',borderBottom:`1px solid ${BORDER}`,padding:'10px 12px'}}>
+          <input placeholder="🔍 Search menu..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:'100%',padding:'8px 11px',borderRadius:8,border:`1px solid ${BORDER}`,fontSize:13,fontFamily:'inherit',outline:'none',marginBottom:8}}/>
+          <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+            {CATS.map(c=><button key={c} onClick={()=>{setCat(c);setSearch('');}} style={{padding:'5px 11px',borderRadius:99,fontSize:11,fontWeight:600,cursor:'pointer',background:cat===c?(CC[c]||G):'transparent',color:cat===c?'#fff':MID,border:cat===c?'none':`1px solid ${BORDER}`,fontFamily:'inherit'}}>{c}</button>)}
+          </div>
+        </div>
+        <div style={{flex:1,overflowY:'auto',padding:10,display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(135px,1fr))',gap:8,alignContent:'start'}}>
+          {vis.map(item=>(
+            <button key={item.id} onClick={()=>add(item)} style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,padding:'11px 9px',cursor:'pointer',textAlign:'left',fontFamily:'inherit',borderTop:`3px solid ${CC[item.cat]||G}`,transition:'box-shadow .15s'}} onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 14px rgba(0,0,0,.1)'} onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}>
+              <div style={{fontSize:24,marginBottom:5}}>{item.emoji}</div>
+              <div style={{fontSize:12,fontWeight:600,color:DARK,lineHeight:1.2,marginBottom:2}}>{item.name}</div>
+              <div style={{fontSize:9,color:MUTED,lineHeight:1.3,marginBottom:6}}>{item.sub}</div>
+              <div style={{fontSize:14,fontWeight:700,color:CC[item.cat]||G,fontFamily:'Georgia,serif'}}>{fmtINR(item.price)}</div>
+            </button>
+          ))}
+          {!vis.length&&<div style={{gridColumn:'1/-1',textAlign:'center',padding:40,color:MUTED,fontSize:13}}>No items found</div>}
+        </div>
+      </div>
+
+      {/* RIGHT CART */}
+      <div style={{width:290,background:'#fff',borderLeft:`1px solid ${BORDER}`,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+        <div style={{padding:'11px 13px',background:GD,color:'#fff',flexShrink:0}}>
+          <div style={{fontWeight:700,fontSize:13}}>Current Bill</div>
+          <div style={{fontSize:10,opacity:.55,marginTop:1}}>{user.name} · {outlet?.name||'Main Store'}</div>
+        </div>
+        <div style={{flex:1,overflowY:'auto',padding:'6px 10px'}}>
+          {!cart.length&&<div style={{textAlign:'center',padding:'28px 14px',color:MUTED}}><div style={{fontSize:26,marginBottom:5}}>🍡</div><div style={{fontSize:12}}>Add items from the menu</div></div>}
+          {cart.map(item=>(
+            <div key={item.id} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 0',borderBottom:`1px solid ${BORDER}`}}>
+              <div style={{flex:1}}><div style={{fontSize:12,fontWeight:500,color:DARK}}>{item.name}</div><div style={{fontSize:10,color:MUTED}}>{fmtINR(item.price)} each</div></div>
+              <div style={{display:'flex',alignItems:'center',gap:4}}>
+                <button onClick={()=>upd(item.id,-1)} style={{width:23,height:23,borderRadius:5,border:`1px solid ${BORDER}`,background:CREAM,cursor:'pointer',fontSize:13,fontFamily:'inherit'}}>−</button>
+                <span style={{width:18,textAlign:'center',fontSize:12,fontWeight:600}}>{item.qty}</span>
+                <button onClick={()=>upd(item.id,1)} style={{width:23,height:23,borderRadius:5,border:`1px solid ${G}`,background:GL,cursor:'pointer',fontSize:13,color:G,fontFamily:'inherit'}}>+</button>
+              </div>
+              <div style={{fontSize:12,fontWeight:600,color:DARK,minWidth:38,textAlign:'right'}}>{fmtINR(item.price*item.qty)}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{borderTop:`1px solid ${BORDER}`,padding:'9px 10px 0',flexShrink:0}}>
+          <div style={{fontSize:10,fontWeight:600,color:MUTED,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:5}}>Discount</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:6}}>
+            <button onClick={()=>{setDiscPct(0);setDiscLabel('');setCustomDisc('');}} style={{fontSize:9,padding:'3px 7px',borderRadius:99,border:`1px solid ${BORDER}`,background:discPct===0?DARK:'transparent',color:discPct===0?'#fff':MID,cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>None</button>
+            {DISC.map(p=><button key={p.id} onClick={()=>{setDiscPct(p.pct);setDiscLabel(p.name);setCustomDisc('');}} style={{fontSize:9,padding:'3px 7px',borderRadius:99,border:`1px solid ${OR}`,background:discLabel===p.name?OR:'transparent',color:discLabel===p.name?'#fff':OR,cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>{p.name}</button>)}
+          </div>
+          <div style={{display:'flex',gap:5,marginBottom:7}}>
+            <input placeholder="Custom %" value={customDisc} onChange={e=>setCustomDisc(e.target.value)} style={{flex:1,padding:'6px 8px',borderRadius:7,border:`1px solid ${BORDER}`,fontSize:11,fontFamily:'inherit',outline:'none'}}/>
+            <Btn onClick={()=>{const v=parseFloat(customDisc);if(!isNaN(v)&&v>=0&&v<=100){setDiscPct(v);setDiscLabel(`Custom ${v}%`);}}} small color={OR}>Apply</Btn>
+          </div>
+          <div style={{fontSize:10,fontWeight:600,color:MUTED,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:5}}>Payment</div>
+          <div style={{display:'flex',gap:4,marginBottom:7}}>
+            {['UPI','Cash','Card'].map(m=><button key={m} onClick={()=>setPay(m)} style={{flex:1,padding:'7px 3px',borderRadius:7,border:`2px solid ${pay===m?G:BORDER}`,background:pay===m?GL:'#fff',color:pay===m?G:MID,cursor:'pointer',fontFamily:'inherit',fontWeight:600,fontSize:11}}>{m==='UPI'?'📲':m==='Cash'?'💵':'💳'} {m}</button>)}
+          </div>
+          <input placeholder="Customer phone (optional)" value={phone} onChange={e=>setPhone(e.target.value)} style={{width:'100%',padding:'7px 9px',borderRadius:7,border:`1px solid ${BORDER}`,fontSize:11,fontFamily:'inherit',outline:'none',marginBottom:7}}/>
+          <div style={{background:CREAM,borderRadius:8,padding:'9px 10px',marginBottom:7}}>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:MID,marginBottom:3}}><span>Subtotal</span><span>{fmtINR(sub)}</span></div>
+            {disc>0&&<div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:OR,marginBottom:3}}><span>Discount</span><span>−{fmtINR(disc)}</span></div>}
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:16,fontWeight:700,color:DARK,borderTop:`1px solid ${BORDER}`,paddingTop:5,marginTop:2}}><span>Total</span><span style={{color:G}}>{fmtINR(total)}</span></div>
+          </div>
+          {ok&&<div style={{background:GL,color:G,borderRadius:7,padding:'7px 10px',textAlign:'center',fontSize:12,fontWeight:600,marginBottom:7}}>✓ Bill saved & printing…</div>}
+          <Btn onClick={bill} disabled={!cart.length} color={G} style={{width:'100%',padding:'11px',fontSize:14,marginBottom:9}}>🖨️ Bill & Print Receipt</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ REPORTS ════════════════════════════════════════════════
+function Reports({outletId}){
+  const [sales,setSales]=useState([]);
+  const [range,setRange]=useState(7);
+  useEffect(()=>setSales(gs('sales')||[]),[]);
+  const f=sales.filter(s=>{if(outletId&&s.outletId!==outletId)return false;const d=new Date(s.createdAt),c=new Date();c.setDate(c.getDate()-range);return d>=c;});
+  const rev=f.reduce((s,x)=>s+x.total,0),ords=f.length,avg=ords?Math.round(rev/ords):0;
+  const pm={};f.forEach(s=>s.items.forEach(i=>{if(!pm[i.name])pm[i.name]={name:i.name,qty:0,rev:0};pm[i.name].qty+=i.qty;pm[i.name].rev+=i.price*i.qty;}));
+  const top=Object.values(pm).sort((a,b)=>b.rev-a.rev).slice(0,8);
+  const days=Array.from({length:Math.min(range,7)},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(Math.min(range,7)-1-i));return d.toISOString().split('T')[0];});
+  const dr=days.map(d=>({date:d,rev:f.filter(s=>s.date===d).reduce((s,x)=>s+x.total,0)}));
+  const mx=Math.max(...dr.map(d=>d.rev),1);
+  const py={};f.forEach(s=>{py[s.paymentMethod]=(py[s.paymentMethod]||0)+s.total;});
+  return(
+    <div style={{padding:18,maxWidth:860}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div><div style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:DARK}}>Sales Reports</div><div style={{fontSize:12,color:MUTED}}>Performance overview</div></div>
+        <select value={range} onChange={e=>setRange(+e.target.value)} style={{padding:'7px 10px',borderRadius:7,border:`1px solid ${BORDER}`,fontSize:12,fontFamily:'inherit',outline:'none'}}>
+          <option value={1}>Today</option><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option>
+        </select>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:9,marginBottom:14}}>
+        <StatCard label="Revenue" value={fmtINR(rev)} color={G} icon="💰"/>
+        <StatCard label="Orders" value={ords} color={OR} icon="🧾"/>
+        <StatCard label="Avg Order" value={fmtINR(avg)} color={NAVY} icon="📊"/>
+        <StatCard label="Items Sold" value={f.reduce((s,x)=>s+x.items.reduce((a,i)=>a+i.qty,0),0)} color={GM} icon="🍡"/>
+      </div>
+      <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,padding:14,marginBottom:12}}>
+        <div style={{fontWeight:600,fontSize:13,color:DARK,marginBottom:12}}>Daily Revenue</div>
+        <div style={{display:'flex',alignItems:'flex-end',gap:6,height:90}}>
+          {dr.map(d=>(
+            <div key={d.date} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+              <div style={{fontSize:9,color:G,fontWeight:600}}>{d.rev>0?fmtINR(d.rev):''}</div>
+              <div style={{width:'100%',background:d.rev>0?G:GL,borderRadius:'3px 3px 0 0',height:`${Math.max(3,(d.rev/mx)*72)}px`}}/>
+              <div style={{fontSize:8,color:MUTED,textAlign:'center'}}>{fmtDate(d.date)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+        <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,padding:14}}>
+          <div style={{fontWeight:600,fontSize:13,color:DARK,marginBottom:10}}>Top Products</div>
+          {!top.length&&<div style={{color:MUTED,fontSize:12}}>No sales yet</div>}
+          {top.map((p,i)=>(
+            <div key={p.name} style={{display:'flex',alignItems:'center',gap:7,padding:'5px 0',borderBottom:`1px solid ${BORDER}`}}>
+              <div style={{width:18,height:18,borderRadius:'50%',background:i<3?G:GL,color:i<3?'#fff':MUTED,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700}}>{i+1}</div>
+              <div style={{flex:1,fontSize:12,color:DARK}}>{p.name}</div>
+              <div style={{fontSize:10,color:MUTED}}>{p.qty}</div>
+              <div style={{fontSize:12,fontWeight:600,color:G}}>{fmtINR(p.rev)}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,padding:14}}>
+            <div style={{fontWeight:600,fontSize:13,color:DARK,marginBottom:9}}>Payment Methods</div>
+            {!Object.keys(py).length&&<div style={{color:MUTED,fontSize:12}}>No data</div>}
+            {Object.entries(py).map(([m,r])=><div key={m} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:`1px solid ${BORDER}`,fontSize:12}}><span style={{color:MID}}>{m==='UPI'?'📲':m==='Cash'?'💵':'💳'} {m}</span><span style={{fontWeight:600,color:DARK}}>{fmtINR(r)}</span></div>)}
+          </div>
+          <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,padding:14}}>
+            <div style={{fontWeight:600,fontSize:13,color:DARK,marginBottom:9}}>Recent Bills</div>
+            {f.slice(-5).reverse().map(s=><div key={s.id} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:`1px solid ${BORDER}`,fontSize:11}}><div><span style={{fontWeight:600,color:DARK}}>{s.billNo}</span><span style={{color:MUTED,marginLeft:6}}>{fmtTime(s.createdAt)}</span></div><span style={{fontWeight:600,color:G}}>{fmtINR(s.total)}</span></div>)}
+            {!f.length&&<div style={{color:MUTED,fontSize:12}}>No bills yet</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ MENU MGMT ══════════════════════════════════════════════
+function MenuMgmt(){
+  const [items,setItems]=useState(MENU);
+  const [editing,setEditing]=useState(null);
+  const [form,setForm]=useState({});
+  useEffect(()=>{const m=gs('menu');if(m)setItems(m);},[]);
+  const save=u=>{ss('menu',u);setItems(u);};
+  const toggle=id=>save(items.map(i=>i.id===id?{...i,active:!i.active}:i));
+  const saveEdit=()=>{const u=editing==='new'?[...items,{...form,id:'m'+uid(),active:true}]:items.map(i=>i.id===editing?{...i,...form}:i);save(u);setEditing(null);setForm({});};
+  const grp=CATS.filter(c=>c!=='All').map(c=>({cat:c,items:items.filter(i=>i.cat===c)}));
+  return(
+    <div style={{padding:18,maxWidth:840}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div><div style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:DARK}}>Menu Management</div><div style={{fontSize:12,color:MUTED}}>{items.filter(i=>i.active).length} active · {items.filter(i=>!i.active).length} hidden</div></div>
+        <Btn onClick={()=>{setEditing('new');setForm({cat:'Zest Collection',active:true});}}>+ Add Item</Btn>
+      </div>
+      {grp.map(g=>(
+        <div key={g.cat} style={{marginBottom:14}}>
+          <div style={{fontSize:10,fontWeight:600,color:CC[g.cat]||G,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>{g.cat} ({g.items.length})</div>
+          <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,overflow:'hidden'}}>
+            {g.items.map((item,idx)=>(
+              <div key={item.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderBottom:idx<g.items.length-1?`1px solid ${BORDER}`:'none',opacity:item.active?1:.5}}>
+                <div style={{fontSize:20}}>{item.emoji}</div>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,color:DARK}}>{item.name}</div><div style={{fontSize:10,color:MUTED}}>{item.sub}</div></div>
+                <div style={{fontSize:14,fontWeight:700,color:G,minWidth:42,textAlign:'right'}}>{fmtINR(item.price)}</div>
+                <Btn small outline color={G} onClick={()=>{setEditing(item.id);setForm({name:item.name,sub:item.sub,price:item.price,emoji:item.emoji,cat:item.cat});}}>Edit</Btn>
+                <button onClick={()=>toggle(item.id)} style={{padding:'5px 9px',borderRadius:7,border:`1px solid ${BORDER}`,background:item.active?GL:CREAM,color:item.active?G:MUTED,fontSize:11,cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>{item.active?'Active':'Hidden'}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {editing&&<Modal title={editing==='new'?'Add Item':'Edit Item'} onClose={()=>{setEditing(null);setForm({});}}>
+        <Inp label="Item Name" value={form.name||''} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+        <Inp label="Description" value={form.sub||''} onChange={e=>setForm(f=>({...f,sub:e.target.value}))}/>
+        <Inp label="Price (₹)" type="number" value={form.price||''} onChange={e=>setForm(f=>({...f,price:+e.target.value}))}/>
+        <Inp label="Emoji" value={form.emoji||''} onChange={e=>setForm(f=>({...f,emoji:e.target.value}))}/>
+        <div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Category</div>
+        <select value={form.cat||''} onChange={e=>setForm(f=>({...f,cat:e.target.value}))} style={{width:'100%',padding:'10px 12px',borderRadius:8,border:`1px solid ${BORDER}`,fontSize:14,fontFamily:'inherit',outline:'none'}}>{CATS.filter(c=>c!=='All').map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:14}}><Btn outline color={MUTED} onClick={()=>{setEditing(null);setForm({});}}>Cancel</Btn><Btn onClick={saveEdit}>Save</Btn></div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ═══ USER MGMT ══════════════════════════════════════════════
+function UserMgmt({adminOutletId}){
+  const [users,setUsers]=useState([]);
+  const [outlets,setOutlets]=useState([]);
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({role:'cashier',active:true});
+  useEffect(()=>{setUsers(gs('users')||[]);setOutlets(gs('outlets')||[]);},[]);
+  const vis=adminOutletId?users.filter(u=>u.outletId===adminOutletId):users;
+  const addUser=()=>{if(!form.name||!form.email||!form.pwd)return;const u={...form,id:'u'+uid()};const up=[...users,u];ss('users',up);setUsers(up);setShowAdd(false);setForm({role:'cashier',active:true});};
+  const toggle=id=>{const up=users.map(u=>u.id===id?{...u,active:!u.active}:u);ss('users',up);setUsers(up);};
+  const rc={llp_admin:NAVY,franchise_owner:G,cashier:OR};
+  return(
+    <div style={{padding:18,maxWidth:720}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div><div style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:DARK}}>Users & Access</div><div style={{fontSize:12,color:MUTED}}>{vis.filter(u=>u.active).length} active</div></div>
+        <Btn onClick={()=>setShowAdd(true)}>+ Add User</Btn>
+      </div>
+      <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,overflow:'hidden'}}>
+        {vis.map((u,i)=>(
+          <div key={u.id} style={{display:'flex',alignItems:'center',gap:11,padding:'12px 15px',borderBottom:i<vis.length-1?`1px solid ${BORDER}`:'none',opacity:u.active?1:.5}}>
+            <div style={{width:33,height:33,borderRadius:'50%',background:rc[u.role]||G,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12,flexShrink:0}}>{u.name.charAt(0)}</div>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,color:DARK}}>{u.name}</div><div style={{fontSize:11,color:MUTED}}>{u.email}</div></div>
+            <Badge color={rc[u.role]}>{roleLabel(u.role)}</Badge>
+            {u.outletId&&<div style={{fontSize:10,color:MUTED}}>{(outlets.find(o=>o.id===u.outletId)||{}).name||''}</div>}
+            <button onClick={()=>toggle(u.id)} style={{padding:'4px 9px',borderRadius:7,border:`1px solid ${BORDER}`,background:u.active?GL:CREAM,color:u.active?G:MUTED,fontSize:10,cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>{u.active?'Active':'Off'}</button>
+          </div>
+        ))}
+      </div>
+      {showAdd&&<Modal title="Add User" onClose={()=>setShowAdd(false)}>
+        <Inp label="Full Name" value={form.name||''} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+        <Inp label="Email" type="email" value={form.email||''} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
+        <Inp label="Password" type="text" value={form.pwd||''} onChange={e=>setForm(f=>({...f,pwd:e.target.value}))}/>
+        <div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Role</div>
+        <select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={{width:'100%',padding:'10px 12px',borderRadius:8,border:`1px solid ${BORDER}`,fontSize:14,fontFamily:'inherit',outline:'none'}}>
+          {!adminOutletId&&<option value="llp_admin">LLP Admin</option>}
+          <option value="franchise_owner">Franchise Owner</option>
+          <option value="cashier">Cashier</option>
+        </select></div>
+        {form.role!=='llp_admin'&&<div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Assign to Outlet</div>
+        <select value={form.outletId||''} onChange={e=>setForm(f=>({...f,outletId:e.target.value}))} style={{width:'100%',padding:'10px 12px',borderRadius:8,border:`1px solid ${BORDER}`,fontSize:14,fontFamily:'inherit',outline:'none'}}><option value="">— Select outlet —</option>{outlets.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></div>}
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:12}}><Btn outline color={MUTED} onClick={()=>setShowAdd(false)}>Cancel</Btn><Btn onClick={addUser}>Create</Btn></div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ═══ OUTLET MGMT ════════════════════════════════════════════
+function OutletMgmt(){
+  const [outlets,setOutlets]=useState([]);
+  const [sales,setSales]=useState([]);
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({status:'active',tier:'Founder'});
+  useEffect(()=>{setOutlets(gs('outlets')||[]);setSales(gs('sales')||[]);},[]);
+  const add=()=>{const o={...form,id:'o'+uid()};const u=[...outlets,o];ss('outlets',u);setOutlets(u);setShowAdd(false);setForm({status:'active',tier:'Founder'});};
+  const oRev=id=>sales.filter(s=>s.outletId===id&&s.date===todayStr()).reduce((s,x)=>s+x.total,0);
+  const oOrd=id=>sales.filter(s=>s.outletId===id&&s.date===todayStr()).length;
+  return(
+    <div style={{padding:18,maxWidth:840}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div><div style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:DARK}}>Franchise Outlets</div><div style={{fontSize:12,color:MUTED}}>{outlets.filter(o=>o.status==='active').length} active</div></div>
+        <Btn onClick={()=>setShowAdd(true)}>+ Add Outlet</Btn>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))',gap:11}}>
+        {outlets.map(o=>(
+          <div key={o.id} style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,overflow:'hidden'}}>
+            <div style={{background:o.status==='active'?GD:MUTED,padding:'11px 13px'}}><div style={{fontSize:13,fontWeight:700,color:'#fff'}}>{o.name}</div><div style={{fontSize:10,color:'rgba(255,255,255,.55)',marginTop:1}}>{o.city} · {o.tier} Partner</div></div>
+            <div style={{padding:'11px 13px'}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7,marginBottom:7}}>
+                <div style={{textAlign:'center',background:CREAM,borderRadius:7,padding:'8px'}}><div style={{fontFamily:'Georgia,serif',fontSize:15,fontWeight:700,color:G}}>{fmtINR(oRev(o.id))}</div><div style={{fontSize:9,color:MUTED,textTransform:'uppercase',letterSpacing:'.05em'}}>Today</div></div>
+                <div style={{textAlign:'center',background:CREAM,borderRadius:7,padding:'8px'}}><div style={{fontFamily:'Georgia,serif',fontSize:15,fontWeight:700,color:OR}}>{oOrd(o.id)}</div><div style={{fontSize:9,color:MUTED,textTransform:'uppercase',letterSpacing:'.05em'}}>Orders</div></div>
+              </div>
+              <div style={{fontSize:10,color:MUTED}}>{o.address}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {showAdd&&<Modal title="Add Outlet" wide onClose={()=>setShowAdd(false)}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><Inp label="Outlet Name" value={form.name||''} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/><Inp label="City" value={form.city||''} onChange={e=>setForm(f=>({...f,city:e.target.value}))}/></div>
+        <Inp label="Address" value={form.address||''} onChange={e=>setForm(f=>({...f,address:e.target.value}))}/>
+        <Inp label="Owner Email" value={form.ownerEmail||''} onChange={e=>setForm(f=>({...f,ownerEmail:e.target.value}))}/>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Tier</div><select value={form.tier} onChange={e=>setForm(f=>({...f,tier:e.target.value}))} style={{width:'100%',padding:'10px 12px',borderRadius:8,border:`1px solid ${BORDER}`,fontSize:14,fontFamily:'inherit',outline:'none'}}>{['Founder','Growth','Scale','Elite'].map(t=><option key={t} value={t}>{t} Partner</option>)}</select></div>
+          <Inp label="Open Date" type="date" value={form.openDate||''} onChange={e=>setForm(f=>({...f,openDate:e.target.value}))}/>
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:10}}><Btn outline color={MUTED} onClick={()=>setShowAdd(false)}>Cancel</Btn><Btn onClick={add}>Add Outlet</Btn></div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ═══ AUDIT MGMT ═════════════════════════════════════════════
+function AuditMgmt(){
+  const [audits,setAudits]=useState([]);
+  const [outlets,setOutlets]=useState([]);
+  const [showNew,setShowNew]=useState(false);
+  const [form,setForm]=useState({scores:{}});
+  const CRIT=['Cleanliness & Hygiene','Ingredient Freshness','Live Prep Visibility','Brand Standards','Product Quality','Customer Service','Billing Accuracy','SOP Compliance'];
+  useEffect(()=>{setAudits(gs('audits')||[]);setOutlets(gs('outlets')||[]);},[]);
+  const ts=obj=>{const v=Object.values(obj);return v.length?Math.round(v.reduce((s,x)=>s+x,0)/v.length):0;};
+  const saveAudit=()=>{const score=ts(form.scores);const a={...form,id:uid(),score,date:todayStr(),createdAt:new Date().toISOString()};const u=[...audits,a];ss('audits',u);setAudits(u);setShowNew(false);setForm({scores:{}});};
+  const sc=s=>s>=85?G:s>=70?OR:s>=50?'#D97706':'#C00000';
+  const sl=s=>s>=85?'Excellent':s>=70?'Satisfactory':s>=50?'Below Std':'Critical';
+  return(
+    <div style={{padding:18,maxWidth:720}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div><div style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:DARK}}>Quality Audits</div><div style={{fontSize:12,color:MUTED}}>{audits.length} audits conducted</div></div>
+        <Btn onClick={()=>setShowNew(true)}>+ New Audit</Btn>
+      </div>
+      {!audits.length&&<div style={{textAlign:'center',padding:44,color:MUTED,background:'#fff',borderRadius:10,border:`1px solid ${BORDER}`}}><div style={{fontSize:26,marginBottom:7}}>📋</div><div style={{fontSize:13}}>No audits yet</div></div>}
+      {audits.slice().reverse().map(a=>(
+        <div key={a.id} style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,padding:'13px 15px',marginBottom:9}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+            <div style={{width:42,height:42,borderRadius:'50%',background:sc(a.score),color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:15,fontFamily:'Georgia,serif',flexShrink:0}}>{a.score}</div>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:DARK}}>{(outlets.find(o=>o.id===a.outletId)||{}).name||a.outletId}</div><div style={{fontSize:11,color:MUTED}}>{fmtDate(a.date)} · {a.auditor}</div></div>
+            <Badge color={sc(a.score)}>{sl(a.score)}</Badge>
+          </div>
+          {a.notes&&<div style={{fontSize:11,color:MID,background:CREAM,borderRadius:7,padding:'6px 10px'}}>{a.notes}</div>}
+        </div>
+      ))}
+      {showNew&&<Modal title="New Quality Audit" wide onClose={()=>setShowNew(false)}>
+        <div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Outlet</div><select value={form.outletId||''} onChange={e=>setForm(f=>({...f,outletId:e.target.value}))} style={{width:'100%',padding:'10px 12px',borderRadius:8,border:`1px solid ${BORDER}`,fontSize:14,fontFamily:'inherit',outline:'none'}}><option value="">— Select outlet —</option>{outlets.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+        <Inp label="Auditor Name" value={form.auditor||''} onChange={e=>setForm(f=>({...f,auditor:e.target.value}))}/>
+        <div style={{fontWeight:600,fontSize:12,color:DARK,marginBottom:7}}>Score each criterion (0–100):</div>
+        {CRIT.map(c=>(
+          <div key={c} style={{display:'flex',alignItems:'center',gap:9,marginBottom:6}}>
+            <div style={{flex:1,fontSize:12,color:MID}}>{c}</div>
+            <input type="number" min={0} max={100} value={form.scores[c]||''} onChange={e=>setForm(f=>({...f,scores:{...f.scores,[c]:+e.target.value}}))} style={{width:58,padding:'6px 8px',borderRadius:7,border:`1px solid ${BORDER}`,fontSize:12,textAlign:'center',fontFamily:'inherit',outline:'none'}}/>
+            {form.scores[c]!==undefined&&<Badge color={sc(form.scores[c])}>{form.scores[c]}</Badge>}
+          </div>
+        ))}
+        <div style={{background:CREAM,borderRadius:7,padding:'8px 11px',margin:'9px 0',display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontWeight:600,color:DARK,fontSize:13}}>Overall</span><span style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:sc(ts(form.scores))}}>{ts(form.scores)}/100</span></div>
+        <Inp label="Notes" value={form.notes||''} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}><Btn outline color={MUTED} onClick={()=>setShowNew(false)}>Cancel</Btn><Btn onClick={saveAudit}>Save Audit</Btn></div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ═══ DASHBOARDS ══════════════════════════════════════════════
+function AdminDashboard(){
+  const [outlets,setOutlets]=useState([]);
+  const [sales,setSales]=useState([]);
+  useEffect(()=>{setOutlets(gs('outlets')||[]);setSales(gs('sales')||[]);},[]);
+  const ts=sales.filter(s=>s.date===todayStr());
+  const rev=ts.reduce((s,x)=>s+x.total,0);
+  const all=sales.reduce((s,x)=>s+x.total,0);
+  const pm={};ts.forEach(s=>s.items.forEach(i=>{pm[i.name]=(pm[i.name]||0)+i.qty;}));
+  const top=Object.entries(pm).sort((a,b)=>b[1]-a[1])[0];
+  return(
+    <div style={{padding:18}}>
+      <div style={{marginBottom:14}}><div style={{fontFamily:'Georgia,serif',fontSize:22,fontWeight:700,color:DARK}}>Good day, Rajender 👋</div><div style={{fontSize:12,color:MUTED}}>{new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:9,marginBottom:14}}>
+        <StatCard label="Today's Revenue" value={fmtINR(rev)} sub="All outlets" color={G} icon="💰"/>
+        <StatCard label="Orders Today" value={ts.length} color={OR} icon="🧾"/>
+        <StatCard label="Active Outlets" value={outlets.filter(o=>o.status==='active').length} color={NAVY} icon="🏪"/>
+        <StatCard label="Top Seller" value={top?top[0].split(' ').slice(0,2).join(' '):'—'} sub={top?`${top[1]} sold`:'No sales yet'} color={GM} icon="⭐"/>
+      </div>
+      <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,overflow:'hidden',marginBottom:11}}>
+        <div style={{padding:'11px 15px',borderBottom:`1px solid ${BORDER}`,fontWeight:600,fontSize:13,color:DARK}}>Outlet Performance — Today</div>
+        {outlets.map((o,i)=>{const r=ts.filter(s=>s.outletId===o.id).reduce((s,x)=>s+x.total,0);const n=ts.filter(s=>s.outletId===o.id).length;return(
+          <div key={o.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 15px',borderBottom:i<outlets.length-1?`1px solid ${BORDER}`:'none'}}>
+            <div style={{width:8,height:8,borderRadius:'50%',background:o.status==='active'?G:MUTED,flexShrink:0}}/>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,color:DARK}}>{o.name}</div><div style={{fontSize:10,color:MUTED}}>{o.city} · {o.tier}</div></div>
+            <div style={{textAlign:'right'}}><div style={{fontSize:14,fontWeight:700,color:G}}>{fmtINR(r)}</div><div style={{fontSize:10,color:MUTED}}>{n} orders</div></div>
+          </div>
+        );})}
+        {!outlets.length&&<div style={{padding:18,textAlign:'center',color:MUTED,fontSize:12}}>No outlets yet. Add first outlet →</div>}
+      </div>
+      <div style={{background:GL,border:`1px solid rgba(26,122,74,.2)`,borderRadius:10,padding:'13px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:9}}>
+        <div><div style={{fontWeight:600,color:G,fontSize:12,marginBottom:2}}>All-time Revenue</div><div style={{fontFamily:'Georgia,serif',fontSize:24,fontWeight:700,color:GD}}>{fmtINR(all)}</div></div>
+        <div style={{fontSize:11,color:GM}}>From {sales.length} total bills</div>
+      </div>
+    </div>
+  );
+}
+function OwnerDashboard({user,outlet}){
+  const [sales,setSales]=useState([]);
+  useEffect(()=>setSales((gs('sales')||[]).filter(x=>x.outletId===user.outletId)),[]);
+  const ts=sales.filter(s=>s.date===todayStr());
+  const rev=ts.reduce((s,x)=>s+x.total,0);
+  const pm={};ts.forEach(s=>s.items.forEach(i=>{pm[i.name]=(pm[i.name]||0)+i.qty;}));
+  const top=Object.entries(pm).sort((a,b)=>b[1]-a[1])[0];
+  return(
+    <div style={{padding:18}}>
+      <div style={{marginBottom:14}}><div style={{fontFamily:'Georgia,serif',fontSize:20,fontWeight:700,color:DARK}}>Outlet Dashboard</div><div style={{fontSize:12,color:MUTED}}>{outlet?.name||'My Outlet'}</div></div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:9,marginBottom:14}}>
+        <StatCard label="Today's Revenue" value={fmtINR(rev)} color={G} icon="💰"/>
+        <StatCard label="Bills Today" value={ts.length} color={OR} icon="🧾"/>
+        <StatCard label="Top Product" value={top?top[0].split(' ').slice(0,2).join(' '):'—'} color={GM} icon="⭐"/>
+        <StatCard label="All-time" value={fmtINR(sales.reduce((s,x)=>s+x.total,0))} color={NAVY} icon="📊"/>
+      </div>
+      <div style={{background:'#fff',border:`1px solid ${BORDER}`,borderRadius:10,overflow:'hidden'}}>
+        <div style={{padding:'10px 14px',borderBottom:`1px solid ${BORDER}`,fontWeight:600,fontSize:12,color:DARK}}>Recent Bills</div>
+        {ts.slice().reverse().slice(0,8).map(s=><div key={s.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 14px',borderBottom:`1px solid ${BORDER}`,fontSize:12}}><div><span style={{fontWeight:600,color:DARK}}>{s.billNo}</span><span style={{color:MUTED,marginLeft:6}}>{fmtTime(s.createdAt)}</span></div><span style={{fontWeight:700,color:G}}>{fmtINR(s.total)}</span></div>)}
+        {!ts.length&&<div style={{padding:18,textAlign:'center',color:MUTED,fontSize:12}}>No bills today yet — start billing!</div>}
+      </div>
+    </div>
+  );
+}
+
+// ═══ LOGIN ══════════════════════════════════════════════════
+function Login({onLogin}){
+  const [email,setEmail]=useState('');
+  const [pwd,setPwd]=useState('');
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(false);
+  const login=e=>{e.preventDefault();setLoading(true);setErr('');const u=(gs('users')||[]).find(u=>u.email===email.trim()&&u.pwd===pwd&&u.active);setTimeout(()=>{if(u){onLogin(u);}else{setErr('Invalid email or password.');}setLoading(false);},300);};
+  const demo=e=>{const u=(gs('users')||[]).find(u=>u.email===e);if(u)onLogin(u);};
+  return(
+    <div style={{minHeight:'100vh',background:GD,display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'inherit'}}>
+      <div style={{width:'100%',maxWidth:400}}>
+        <div style={{textAlign:'center',marginBottom:26}}>
+          <div style={{fontFamily:'Georgia,serif',fontSize:42,fontWeight:700,color:'#fff',letterSpacing:'-2px',lineHeight:1}}>RealStick™</div>
+          <div style={{fontSize:11,color:'rgba(255,255,255,.4)',marginTop:4,letterSpacing:'.1em',textTransform:'uppercase'}}>Billing & Management System</div>
+        </div>
+        <div style={{background:'#fff',borderRadius:14,padding:22,boxShadow:'0 8px 40px rgba(0,0,0,.25)',marginBottom:12}}>
+          <div style={{fontWeight:700,fontSize:16,color:DARK,marginBottom:16}}>Sign in to your account</div>
+          <form onSubmit={login}>
+            <Inp label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com"/>
+            <Inp label="Password" type="password" value={pwd} onChange={e=>setPwd(e.target.value)} placeholder="Enter password"/>
+            {err&&<div style={{background:'#FFF5F5',color:'#C00000',borderRadius:7,padding:'7px 11px',fontSize:12,marginBottom:10}}>{err}</div>}
+            <button type="submit" disabled={loading} style={{width:'100%',padding:'11px',background:G,color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginTop:4}}>{loading?'Signing in…':'Sign In →'}</button>
+          </form>
+        </div>
+        <div style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.12)',borderRadius:12,padding:13}}>
+          <div style={{fontSize:9,color:'rgba(255,255,255,.35)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8}}>Demo Accounts — Click to Login</div>
+          {[{l:'LLP Admin',d:'Full access · All outlets',e:'admin@realstick.in',c:NAVY},{l:'Franchise Owner',d:'Own outlet · Reports & POS',e:'owner@realstick.in',c:G},{l:'Cashier',d:'Billing only',e:'cashier@realstick.in',c:OR}].map(d=>(
+            <button key={d.e} onClick={()=>demo(d.e)} style={{display:'flex',alignItems:'center',gap:9,width:'100%',background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.1)',borderRadius:8,padding:'7px 9px',marginBottom:5,cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
+              <div style={{width:25,height:25,borderRadius:'50%',background:d.c,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:10,color:'#fff',flexShrink:0}}>{d.l.charAt(0)}</div>
+              <div><div style={{fontSize:11,fontWeight:600,color:'#fff'}}>{d.l}</div><div style={{fontSize:9,color:'rgba(255,255,255,.4)'}}>{d.d}</div></div>
+              <div style={{marginLeft:'auto',fontSize:9,color:'rgba(255,255,255,.25)'}}>{d.e}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ ROLE APPS ══════════════════════════════════════════════
+function AdminApp({user,logout}){
+  const [tab,setTab]=useState('dashboard');
+  const T=[{id:'dashboard',icon:'📊',label:'Dashboard'},{id:'pos',icon:'🧾',label:'Billing / POS'},{id:'outlets',icon:'🏪',label:'Outlets'},{id:'menu',icon:'🍡',label:'Menu'},{id:'users',icon:'👥',label:'Users'},{id:'reports',icon:'📈',label:'Reports'},{id:'audits',icon:'📋',label:'Audits'}];
+  return(
+    <div style={{display:'flex',height:'100vh',overflow:'hidden'}}>
+      <Sidebar items={T} active={tab} onNav={setTab} user={user} onLogout={logout}/>
+      <div style={{flex:1,overflowY:tab==='pos'?'hidden':'auto',background:CREAM}}>
+        {tab==='dashboard'&&<AdminDashboard/>}
+        {tab==='pos'&&<POS user={user} outlet={(gs('outlets')||[])[0]}/>}
+        {tab==='outlets'&&<OutletMgmt/>}
+        {tab==='menu'&&<MenuMgmt/>}
+        {tab==='users'&&<UserMgmt/>}
+        {tab==='reports'&&<Reports/>}
+        {tab==='audits'&&<AuditMgmt/>}
+      </div>
+    </div>
+  );
+}
+function OwnerApp({user,logout}){
+  const [tab,setTab]=useState('dashboard');
+  const [outlet,setOutlet]=useState(null);
+  useEffect(()=>setOutlet(((gs('outlets')||[]).find(o=>o.id===user.outletId))),[]);
+  const T=[{id:'dashboard',icon:'📊',label:'Dashboard'},{id:'pos',icon:'🧾',label:'Billing / POS'},{id:'reports',icon:'📈',label:'Reports'},{id:'staff',icon:'👥',label:'My Staff'}];
+  return(
+    <div style={{display:'flex',height:'100vh',overflow:'hidden'}}>
+      <Sidebar items={T} active={tab} onNav={setTab} user={user} onLogout={logout}/>
+      <div style={{flex:1,overflowY:tab==='pos'?'hidden':'auto',background:CREAM}}>
+        {tab==='dashboard'&&<OwnerDashboard user={user} outlet={outlet}/>}
+        {tab==='pos'&&<POS user={user} outlet={outlet}/>}
+        {tab==='reports'&&<Reports outletId={user.outletId}/>}
+        {tab==='staff'&&<UserMgmt adminOutletId={user.outletId}/>}
+      </div>
+    </div>
+  );
+}
+function CashierApp({user,logout}){
+  const [outlet,setOutlet]=useState(null);
+  useEffect(()=>setOutlet(((gs('outlets')||[]).find(o=>o.id===user.outletId))),[]);
+  return(
+    <div style={{display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden'}}>
+      <div style={{background:GD,padding:'8px 13px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+        <div style={{fontFamily:'Georgia,serif',fontSize:15,fontWeight:700,color:'#fff'}}>RealStick™ <span style={{fontSize:10,fontWeight:400,opacity:.45,marginLeft:5}}>POS</span></div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}><div style={{fontSize:10,color:'rgba(255,255,255,.5)'}}>{user.name} · {outlet?.name}</div><button onClick={logout} style={{fontSize:10,color:'rgba(255,255,255,.3)',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit'}}>Sign out</button></div>
+      </div>
+      <div style={{flex:1,overflow:'hidden'}}><POS user={user} outlet={outlet}/></div>
+    </div>
+  );
+}
+
+// ═══ MAIN ═══════════════════════════════════════════════════
+function App(){
+  const [user,setUser]=useState(null);
+  const [ready,setReady]=useState(false);
+  useEffect(()=>{initDB();setReady(true);},[]);
+  if(!ready)return null;
+  if(!user)return <Login onLogin={setUser}/>;
+  if(user.role==='llp_admin')return <AdminApp user={user} logout={()=>setUser(null)}/>;
+  if(user.role==='franchise_owner')return <OwnerApp user={user} logout={()=>setUser(null)}/>;
+  return <CashierApp user={user} logout={()=>setUser(null)}/>;
+}
+
+// Mount
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+// Hide loader
+document.getElementById('loading').style.display='none';
+</script>
+</body>
+</html>

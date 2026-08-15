@@ -1,0 +1,136 @@
+import { useEffect, useId, useState } from 'react';
+import { LogOut, Menu, X } from 'lucide-react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
+
+import { useAuth } from '../../features/auth/AuthProvider';
+import { navForRole } from '../../features/auth/nav';
+
+export function AppShell() {
+  const { profile, signOut } = useAuth();
+  const { pathname } = useLocation();
+  const items = navForRole(profile?.role);
+  const isPos = pathname === '/pos';
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerId = useId();
+
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setDrawerOpen(false);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
+
+  const navLinks = (
+    <nav className="space-y-1 p-3">
+      {items.map((item) => (
+        <NavLink
+          key={`${item.path}-${item.label}`}
+          to={item.path}
+          end={item.path === '/dashboard'}
+          onClick={() => setDrawerOpen(false)}
+          className={({ isActive }) =>
+            [
+              'flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm',
+              isActive
+                ? 'bg-white/15 text-white'
+                : 'text-white/70 hover:bg-white/10 hover:text-white',
+            ].join(' ')
+          }
+        >
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+
+  const userBlock = (
+    <div className={`border-t border-white/10 p-4 ${isPos ? '' : 'md:fixed md:bottom-0 md:w-60'}`}>
+      <div className="text-sm">{profile?.full_name}</div>
+      <div className="mb-1 text-xs text-white/45">{profile?.role}</div>
+      {profile?.email ? (
+        <div className="mb-3 truncate text-xs text-white/35">{profile.email}</div>
+      ) : (
+        <div className="mb-3" />
+      )}
+      <button
+        type="button"
+        onClick={() => void signOut()}
+        className="flex min-h-11 items-center gap-2 text-xs text-white/55 hover:text-white"
+      >
+        <LogOut size={14} />
+        Sign out
+      </button>
+    </div>
+  );
+
+  return (
+    <div
+      className={
+        isPos
+          ? 'flex h-screen flex-col overflow-hidden bg-[#FDFAF4] lg:flex-row'
+          : 'min-h-screen bg-[#FDFAF4] md:flex'
+      }
+    >
+      {isPos ? (
+        <header className="flex shrink-0 items-center gap-3 bg-[#0D4F2E] px-3 py-2 text-white lg:hidden">
+          <button
+            type="button"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg"
+            aria-expanded={drawerOpen}
+            aria-controls={drawerId}
+            aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}
+            onClick={() => setDrawerOpen((value) => !value)}
+          >
+            {drawerOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+          <div className="font-serif text-xl font-bold">RealStick™</div>
+        </header>
+      ) : null}
+
+      {isPos && drawerOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          aria-label="Close navigation"
+          onClick={() => setDrawerOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        id={isPos ? drawerId : undefined}
+        className={
+          isPos
+            ? `fixed inset-y-0 left-0 z-40 flex w-60 flex-col bg-[#0D4F2E] text-white transition-transform lg:static lg:h-screen lg:translate-x-0 lg:overflow-y-auto ${
+                drawerOpen ? 'translate-x-0' : '-translate-x-full'
+              }`
+            : `w-full bg-[#0D4F2E] text-white md:w-60 md:min-h-screen`
+        }
+      >
+        <div className="border-b border-white/10 px-5 py-5">
+          <div className="font-serif text-2xl font-bold">RealStick™</div>
+          <div className="mt-1 text-[10px] uppercase tracking-[.18em] text-white/45">
+            Enterprise
+          </div>
+        </div>
+        {navLinks}
+        {userBlock}
+      </aside>
+
+      <main
+        className={
+          isPos
+            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+            : 'min-w-0 flex-1 p-5 md:p-8'
+        }
+      >
+        <Outlet />
+      </main>
+    </div>
+  );
+}

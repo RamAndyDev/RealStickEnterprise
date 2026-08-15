@@ -1,0 +1,415 @@
+from uuid import uuid4
+
+from tests.conftest import (
+    ADMIN_ID,
+    EMPLOYEE_ID,
+    FRANCHISE_A,
+    FRANCHISE_B,
+    OWNER_CANDIDATE_ID,
+    OWNER_ID,
+)
+
+
+def test_admin_can_list_franchises(client, auth_header_factory):
+    response = client.get(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body['total'] >= 2
+    names = {item['name'] for item in body['items']}
+    assert 'Hyderabad — Main Store' in names
+
+
+def test_admin_can_create_franchise(client, auth_header_factory):
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Gachibowli Outlet',
+            'city': 'Hyderabad',
+            'state': 'Telangana',
+            'address': 'Financial District',
+            'owner_email': 'gachi.owner@realstick.in',
+            'tier': 'Founder',
+            'open_date': '2026-09-01',
+            'code': 'GACHI-01',
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['name'] == 'Gachibowli Outlet'
+    assert body['tier'] == 'Founder'
+    assert body['status'] == 'SETUP'
+    assert body['launch_progress_total'] >= 1
+    assert len(body['launch_checklist']) >= 1
+
+
+def test_admin_can_create_franchise_owner(client, auth_header_factory, fake_db):
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'full_name': 'New Outlet Owner',
+            'email': 'new.owner@realstick.in',
+            'phone': '9876543210',
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert 'password' not in body
+    assert body['password_setup'] in {'invite_email_sent', 'recovery_email_sent'}
+    assert body['owner']['full_name'] == 'New Outlet Owner'
+    assert body['owner']['is_active'] is True
+    assert body['franchise']['owner']['id'] == body['owner']['id']
+    assert body['franchise']['owner_email'] == 'new.owner@realstick.in'
+
+    owner_id = body['owner']['id']
+    profile = next(p for p in fake_db.tables['profiles'] if p['id'] == owner_id)
+    assert profile['role'] == 'FRANCHISE_OWNER'
+    assert profile['franchise_id'] == str(FRANCHISE_B)
+    assert profile['full_name'] == 'New Outlet Owner'
+    assert 'password' not in profile
+
+    auth_emails = [u.email for u in fake_db.auth.admin._users]
+    assert 'new.owner@realstick.in' in auth_emails
+    assert any(item['email'] == 'new.owner@realstick.in' for item in fake_db.auth.admin.invites)
+
+
+def test_owner_invite_fallback_sends_recovery_email(client, auth_header_factory, fake_db):
+    fake_db.auth.admin.fail_next_invite = True
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'full_name': 'Fallback Owner',
+            'email': 'fallback.owner@realstick.in',
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['password_setup'] == 'recovery_email_sent'
+    assert body['owner']['full_name'] == 'Fallback Owner'
+    assert any(item['email'] == 'fallback.owner@realstick.in' for item in fake_db.auth.recovery_emails)
+
+
+def test_created_owner_auth_and_profile_are_linked(client, auth_header_factory, fake_db):
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'full_name': 'Linked Owner', 'email': 'linked.owner@realstick.in'},
+    )
+    assert response.status_code == 201
+    owner_id = response.json()['owner']['id']
+    assert any(str(u.id) == owner_id for u in fake_db.auth.admin._users)
+    profile = next(p for p in fake_db.tables['profiles'] if p['id'] == owner_id)
+    assert profile['role'] == 'FRANCHISE_OWNER'
+    assert profile['franchise_id'] == str(FRANCHISE_B)
+
+
+def test_non_admin_cannot_create_franchise_owner(client, auth_header_factory):
+    owner = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(OWNER_ID, 'owner@realstick.in'),
+        json={'full_name': 'Nope', 'email': 'nope@realstick.in'},
+    )
+    employee = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(EMPLOYEE_ID, 'employee@realstick.in'),
+        json={'full_name': 'Nope', 'email': 'nope2@realstick.in'},
+    )
+    assert owner.status_code == 403
+    assert employee.status_code == 403
+
+
+def test_duplicate_or_invalid_owner_create_handled(client, auth_header_factory):
+    invalid_email = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'full_name': 'Bad Email', 'email': 'not-an-email'},
+    )
+    assert invalid_email.status_code == 422
+
+    missing_name = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'full_name': '  ', 'email': 'blank.name@realstick.in'},
+    )
+    assert missing_name.status_code == 422
+
+    duplicate = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owners',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'full_name': 'Existing', 'email': 'owner@realstick.in'},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_create_owner_reassignment_deactivates_previous(client, auth_header_factory, fake_db):
+    # FRANCHISE_A already has OWNER_ID as active owner.
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}/owners',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'full_name': 'Replacement Owner', 'email': 'replacement@realstick.in'},
+    )
+    assert response.status_code == 201
+    new_owner_id = response.json()['owner']['id']
+
+    previous = next(p for p in fake_db.tables['profiles'] if p['id'] == str(OWNER_ID))
+    assert previous['is_active'] is False
+
+    active_owners = [
+        p
+        for p in fake_db.tables['profiles']
+        if p.get('franchise_id') == str(FRANCHISE_A)
+        and p.get('role') == 'FRANCHISE_OWNER'
+        and p.get('is_active')
+    ]
+    assert len(active_owners) == 1
+    assert active_owners[0]['id'] == new_owner_id
+
+
+def test_admin_can_assign_owner(client, auth_header_factory):
+    response = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owner',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'owner_profile_id': str(OWNER_CANDIDATE_ID),
+            'owner_email': 'candidate@realstick.in',
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body['owner'] is not None
+    assert body['owner']['id'] == str(OWNER_CANDIDATE_ID)
+    assert body['owner_email'] == 'candidate@realstick.in'
+
+
+def test_reassignment_via_assign_respects_active_owner_constraint(client, auth_header_factory, fake_db):
+    # Promote candidate onto FRANCHISE_B (no prior owner).
+    first = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owner',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'owner_profile_id': str(OWNER_CANDIDATE_ID)},
+    )
+    assert first.status_code == 200
+
+    # Create a second employee-like profile under FRANCHISE_B to reassign to.
+    from uuid import uuid4
+
+    second_id = str(uuid4())
+    fake_db.tables['profiles'].append(
+        {
+            'id': second_id,
+            'full_name': 'Second Candidate',
+            'role': 'EMPLOYEE',
+            'franchise_id': str(FRANCHISE_B),
+            'phone': None,
+            'is_active': True,
+        }
+    )
+    fake_db.auth.admin._users.append(
+        type('U', (), {'id': second_id, 'email': 'second@realstick.in'})()
+    )
+
+    second = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owner',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'owner_profile_id': second_id, 'owner_email': 'second@realstick.in'},
+    )
+    assert second.status_code == 200
+
+    active_owners = [
+        p
+        for p in fake_db.tables['profiles']
+        if p.get('franchise_id') == str(FRANCHISE_B)
+        and p.get('role') == 'FRANCHISE_OWNER'
+        and p.get('is_active')
+    ]
+    assert len(active_owners) == 1
+    assert active_owners[0]['id'] == second_id
+
+    previous = next(p for p in fake_db.tables['profiles'] if p['id'] == str(OWNER_CANDIDATE_ID))
+    assert previous['is_active'] is False
+
+
+def test_admin_can_update_franchise(client, auth_header_factory):
+    response = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Secunderabad Express',
+            'city': 'Secunderabad',
+            'tier': 'Scale',
+            'address': 'Updated Address',
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body['name'] == 'Secunderabad Express'
+    assert body['tier'] == 'Scale'
+    assert body['address'] == 'Updated Address'
+
+
+def test_admin_can_change_franchise_status(client, auth_header_factory):
+    response = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}/status',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'status': 'SUSPENDED'},
+    )
+    assert response.status_code == 200
+    assert response.json()['status'] == 'SUSPENDED'
+
+    closed = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}/status',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'status': 'CLOSED'},
+    )
+    assert closed.status_code == 200
+    assert closed.json()['status'] == 'CLOSED'
+    assert closed.json()['closed_at'] is not None
+
+
+def test_non_admin_receives_403_on_franchise_list(client, auth_header_factory):
+    owner = client.get(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(OWNER_ID, 'owner@realstick.in'),
+    )
+    employee = client.get(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(EMPLOYEE_ID, 'employee@realstick.in'),
+    )
+    assert owner.status_code == 403
+    assert employee.status_code == 403
+
+
+def test_invalid_franchise_data_rejected(client, auth_header_factory):
+    bad_tier = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'name': 'Bad Tier Outlet', 'tier': 'Platinum'},
+    )
+    assert bad_tier.status_code == 422
+
+    bad_email = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'name': 'Bad Email Outlet', 'owner_email': 'not-an-email'},
+    )
+    assert bad_email.status_code == 422
+
+    bad_status = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'name': 'Bad Status Outlet', 'status': 'active'},
+    )
+    assert bad_status.status_code == 422
+
+    missing_name = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'city': 'Hyderabad'},
+    )
+    assert missing_name.status_code == 422
+
+    duplicate_code = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'name': 'Dup Code', 'code': 'HYD-MAIN'},
+    )
+    assert duplicate_code.status_code == 409
+
+
+def test_duplicate_or_invalid_owner_assignment_rejected(client, auth_header_factory):
+    # Already active owner of FRANCHISE_A cannot be assigned to FRANCHISE_B
+    conflict = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owner',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'owner_profile_id': str(OWNER_ID)},
+    )
+    assert conflict.status_code == 409
+
+    # SYSTEM_ADMIN cannot be owner
+    admin_as_owner = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owner',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'owner_profile_id': str(ADMIN_ID)},
+    )
+    assert admin_as_owner.status_code == 400
+
+    # Unknown profile
+    missing = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owner',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'owner_profile_id': str(uuid4())},
+    )
+    assert missing.status_code == 404
+
+    # Unknown email
+    missing_email = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/owner',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'owner_email': 'nobody@realstick.in'},
+    )
+    assert missing_email.status_code == 404
+
+
+def test_franchise_retrieval_works(client, auth_header_factory):
+    response = client.get(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body['id'] == str(FRANCHISE_A)
+    assert body['name'] == 'Hyderabad — Main Store'
+    assert body['payment_status'] == 'COMPLETED'
+    assert body['owner'] is not None
+    assert len(body['payments']) >= 1
+
+
+def test_application_retrieval_works(client, auth_header_factory):
+    listed = client.get(
+        '/api/v1/admin/franchise-applications',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert listed.status_code == 200
+    assert listed.json()['total'] >= 1
+    application_id = listed.json()['items'][0]['id']
+
+    detail = client.get(
+        f'/api/v1/admin/franchise-applications/{application_id}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert detail.status_code == 200
+    assert detail.json()['applicant_name'] == 'Asha Reddy'
+
+    # Also available on franchise detail
+    franchise = client.get(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert franchise.status_code == 200
+    assert len(franchise.json()['applications']) >= 1
+
+
+def test_launch_checklist_progress_retrieval_works(client, auth_header_factory):
+    response = client.get(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}/launch-checklist',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 200
+    items = response.json()
+    assert len(items) >= 2
+    completed = [i for i in items if i['is_completed']]
+    assert len(completed) >= 1
+
+    pending = next(i for i in items if not i['is_completed'])
+    updated = client.patch(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}/launch-checklist/{pending["id"]}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={'is_completed': True},
+    )
+    assert updated.status_code == 200
+    assert updated.json()['is_completed'] is True

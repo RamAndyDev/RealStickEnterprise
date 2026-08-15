@@ -1,0 +1,31 @@
+---
+description: RealStick Enterprise project-wide rules
+alwaysApply: true
+---
+# RealStick Enterprise Rules
+
+Roles: SYSTEM_ADMIN, FRANCHISE_OWNER, EMPLOYEE.
+
+Frontend: React + TypeScript + Vite + Tailwind.
+Backend: FastAPI with module -> service -> repository separation.
+Database: Supabase PostgreSQL.
+
+Security:
+- Never store plaintext passwords.
+- Never expose SUPABASE_SERVICE_ROLE_KEY to the frontend.
+- Enforce authorization server-side.
+- Do not rely on hidden UI controls for security.
+
+API:
+- Prefix APIs with /api/v1.
+- Validate payloads with Pydantic.
+- Use correct HTTP status codes.
+
+Database:
+- UUID primary keys.
+- created_at and updated_at.
+- Foreign keys.
+- RLS enabled.
+- Preserve transactional records; prefer status/archive fields.
+
+Prototype rule: preserve the uploaded prototype's business concepts unless the product specification explicitly changes them.

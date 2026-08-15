@@ -1,0 +1,30 @@
+#node
+node_modules/
+dist/
+
+#Environment / Secrets
+.env
+.env.*
+!.env.example
+
+#Python
+.venv/
+__pycache__/
+*.py[cod]
+
+#IDE
+.vscode/
+.idea/
+
+#Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/cache
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/

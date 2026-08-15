@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  color: #1a1a18;
+  background: #fdfaf4;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #1a7a4a;
+  outline-offset: 2px;
+}
+
+@keyframes rsFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rs-fade-up {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rs-fade-up {
+    animation: rsFadeUp 0.7s ease both;
+  }
+  .rs-fade-up-delay {
+    animation-delay: 0.12s;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  z-index: 50;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}

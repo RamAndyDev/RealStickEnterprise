@@ -159,6 +159,24 @@ def complete_pos_order_atomic(tables: dict[str, list[dict]], params: dict[str, A
         offer_franchise = offer.get('franchise_id')
         if offer_franchise not in (None, '') and str(offer_franchise) != str(franchise_id):
             raise PosCheckoutError('OFFER_NOT_APPLICABLE')
+        promotion_id = offer.get('promotion_id')
+        if promotion_id not in (None, ''):
+            promotion = _find(tables.get('promotions', []), id=promotion_id)
+            if not promotion or not promotion.get('is_active'):
+                raise PosCheckoutError('PROMOTION_INACTIVE')
+            promo_from = _parse_dt(promotion.get('valid_from'))
+            promo_to = _parse_dt(promotion.get('valid_to'))
+            if promo_from and promo_from > now_dt:
+                raise PosCheckoutError('PROMOTION_EXPIRED')
+            if promo_to and promo_to < now_dt:
+                raise PosCheckoutError('PROMOTION_EXPIRED')
+            participating = any(
+                str(row.get('promotion_id')) == str(promotion_id)
+                and str(row.get('franchise_id')) == str(franchise_id)
+                for row in tables.get('promotion_franchises', [])
+            )
+            if not participating:
+                raise PosCheckoutError('PROMOTION_NOT_APPLICABLE')
         try:
             discount_value = _money(offer['discount_value'])
         except Exception as exc:

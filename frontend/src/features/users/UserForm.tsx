@@ -8,6 +8,9 @@ import type { ManagedUser } from '../../types/user';
 export type UserFormValues = {
   full_name: string;
   email: string;
+  login_id: string;
+  password: string;
+  confirm_password: string;
   phone: string;
   role: UserRole;
   franchise_id: string;
@@ -17,6 +20,9 @@ export function emptyUserForm(role: UserRole = 'SYSTEM_ADMIN'): UserFormValues {
   return {
     full_name: '',
     email: '',
+    login_id: '',
+    password: '',
+    confirm_password: '',
     phone: '',
     role,
     franchise_id: '',
@@ -27,6 +33,9 @@ export function userToForm(user: ManagedUser): UserFormValues {
   return {
     full_name: user.full_name,
     email: user.email ?? '',
+    login_id: user.login_id ?? '',
+    password: '',
+    confirm_password: '',
     phone: user.phone ?? '',
     role: user.role,
     franchise_id: user.franchise_id ?? '',
@@ -39,6 +48,7 @@ export function UserForm({
   franchises = [],
   franchiseLabel,
   submitting,
+  employeeMode = false,
   onCancel,
   onSubmit,
 }: {
@@ -47,6 +57,7 @@ export function UserForm({
   franchises?: Franchise[];
   franchiseLabel?: string;
   submitting: boolean;
+  employeeMode?: boolean;
   onCancel: () => void;
   onSubmit: (values: UserFormValues) => void;
 }) {
@@ -54,6 +65,8 @@ export function UserForm({
   const isSystemAdmin = values.role === 'SYSTEM_ADMIN';
   const showFranchiseSelect = !franchiseLabel && !isSystemAdmin;
   const showReadOnlyFranchise = Boolean(franchiseLabel);
+  const passwordMismatch =
+    employeeMode && mode === 'create' && values.password !== values.confirm_password;
 
   function update<K extends keyof UserFormValues>(key: K, value: UserFormValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -66,27 +79,70 @@ export function UserForm({
 
   return (
     <form onSubmit={handleSubmit}>
+      {employeeMode && mode === 'create' ? (
+        <Field
+          label="User ID"
+          required
+          value={values.login_id}
+          onChange={(event) => update('login_id', event.target.value)}
+          placeholder="EMP001"
+        />
+      ) : null}
       <Field
         label="Name"
         required
         value={values.full_name}
         onChange={(event) => update('full_name', event.target.value)}
       />
-      <Field
-        label="Email"
-        type="email"
-        required
-        value={values.email}
-        disabled={mode === 'edit'}
-        onChange={(event) => update('email', event.target.value)}
-      />
+      {employeeMode && mode === 'edit' ? (
+        <Field
+          label="User ID"
+          required
+          value={values.login_id}
+          onChange={(event) => update('login_id', event.target.value)}
+          placeholder="EMP001"
+        />
+      ) : null}
+      {!employeeMode ? (
+        <Field
+          label="Email"
+          type="email"
+          required
+          value={values.email}
+          disabled={mode === 'edit'}
+          onChange={(event) => update('email', event.target.value)}
+        />
+      ) : null}
+      {employeeMode && mode === 'create' ? (
+        <>
+          <Field
+            label="Initial password"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={values.password}
+            onChange={(event) => update('password', event.target.value)}
+          />
+          <Field
+            label="Confirm password"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={values.confirm_password}
+            onChange={(event) => update('confirm_password', event.target.value)}
+          />
+          {passwordMismatch ? (
+            <p className="mb-3 text-xs text-red-600">Passwords do not match.</p>
+          ) : null}
+        </>
+      ) : null}
       <Field
         label="Phone"
         value={values.phone}
         onChange={(event) => update('phone', event.target.value)}
       />
 
-      {mode === 'create' && !franchiseLabel ? (
+      {mode === 'create' && !franchiseLabel && !employeeMode ? (
         <SelectField
           label="Role"
           value={values.role}
@@ -124,14 +180,20 @@ export function UserForm({
         </SelectField>
       ) : null}
 
-      {isSystemAdmin ? (
+      {isSystemAdmin && !employeeMode ? (
         <p className="mb-4 text-xs text-[#8A8A84]">System admins are not assigned to a franchise.</p>
       ) : null}
 
-      {mode === 'create' ? (
+      {mode === 'create' && !employeeMode ? (
         <p className="mb-4 text-xs text-[#8A8A84]">
           A secure password setup invite is emailed. Passwords are never stored in profiles or shown
           here.
+        </p>
+      ) : null}
+      {mode === 'create' && employeeMode ? (
+        <p className="mb-4 text-xs text-[#8A8A84]">
+          Share the User ID and password with the employee offline. Passwords are never stored in
+          profiles.
         </p>
       ) : null}
 
@@ -144,7 +206,9 @@ export function UserForm({
           disabled={
             submitting ||
             !values.full_name.trim() ||
-            (mode === 'create' && !values.email.trim()) ||
+            (employeeMode && !values.login_id.trim()) ||
+            (employeeMode && mode === 'create' && (values.password.length < 8 || passwordMismatch)) ||
+            (!employeeMode && mode === 'create' && !values.email.trim()) ||
             (showFranchiseSelect && !values.franchise_id)
           }
         >

@@ -55,6 +55,9 @@ class Offer(BaseModel):
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     franchise_id: UUID | None = None
+    promotion_id: UUID | None = None
+    promotion_name: str | None = None
+    promotion_promo_code: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -75,6 +78,7 @@ class OfferCreate(BaseModel):
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     franchise_id: UUID | None = None
+    promotion_id: UUID | None = None
 
     @field_validator('name', mode='before')
     @classmethod
@@ -107,9 +111,11 @@ class OfferUpdate(BaseModel):
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     franchise_id: UUID | None = None
+    promotion_id: UUID | None = None
     clear_valid_from: bool = False
     clear_valid_to: bool = False
     clear_franchise_id: bool = False
+    clear_promotion_id: bool = False
 
     @field_validator('name', mode='before')
     @classmethod
@@ -146,6 +152,95 @@ def offer_from_row(row: dict[str, Any]) -> Offer:
         valid_from=row.get('valid_from'),
         valid_to=row.get('valid_to'),
         franchise_id=row.get('franchise_id'),
+        promotion_id=row.get('promotion_id'),
+        promotion_name=row.get('promotion_name'),
+        promotion_promo_code=row.get('promotion_promo_code'),
         created_at=row.get('created_at'),
         updated_at=row.get('updated_at'),
     )
+
+
+class Promotion(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    promo_code: str
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    is_active: bool
+    franchise_ids: list[UUID] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PromotionListResponse(BaseModel):
+    items: list[Promotion]
+    total: int
+
+
+class PromotionCreate(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    promo_code: str = Field(min_length=1, max_length=40)
+    is_active: bool = True
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    franchise_ids: list[UUID] = Field(default_factory=list)
+
+    @field_validator('name', 'promo_code', mode='before')
+    @classmethod
+    def require_text(cls, value: object) -> str:
+        stripped = _strip_text(value)
+        if not stripped:
+            raise ValueError('This field is required')
+        return stripped
+
+    @field_validator('description', mode='before')
+    @classmethod
+    def strip_description(cls, value: object) -> str | None:
+        return _strip_text(value)
+
+    @model_validator(mode='after')
+    def validity_window(self) -> 'PromotionCreate':
+        if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
+            raise ValueError('valid_from must be on or before valid_to')
+        return self
+
+
+class PromotionUpdate(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    promo_code: str | None = Field(default=None, min_length=1, max_length=40)
+    is_active: bool | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    franchise_ids: list[UUID] | None = None
+    clear_valid_from: bool = False
+    clear_valid_to: bool = False
+
+    @field_validator('name', 'promo_code', mode='before')
+    @classmethod
+    def strip_text_field(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        stripped = _strip_text(value)
+        if not stripped:
+            raise ValueError('This field cannot be empty')
+        return stripped
+
+    @field_validator('description', mode='before')
+    @classmethod
+    def strip_description(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        return _strip_text(value)
+
+    @model_validator(mode='after')
+    def validity_window(self) -> 'PromotionUpdate':
+        if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
+            raise ValueError('valid_from must be on or before valid_to')
+        return self

@@ -34,6 +34,7 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
   const [showAssign, setShowAssign] = useState(false);
   const [productId, setProductId] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
+  const [assignActive, setAssignActive] = useState(true);
   const [editRow, setEditRow] = useState<FranchiseProductAssignment | null>(null);
   const [editPrice, setEditPrice] = useState('');
 
@@ -62,12 +63,13 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
       assignFranchiseProduct(franchiseId, {
         product_id: productId,
         selling_price: Number(sellingPrice),
-        is_active: true,
+        is_active: assignActive,
       }),
     onSuccess: async () => {
       setShowAssign(false);
       setProductId('');
       setSellingPrice('');
+      setAssignActive(true);
       setFeedback('Product assigned.');
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-franchise-products', franchiseId] });
@@ -205,7 +207,7 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
                   color: item.is_active ? '#1A7A4A' : '#8A8A84',
                 }}
               >
-                {item.is_active ? 'Active' : 'Hidden'}
+                {item.is_active ? 'Assignment Active' : 'Assignment Hidden'}
               </button>
             </div>
           ))}
@@ -240,6 +242,14 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
             error={sellingPrice ? sellingPriceError(sellingPrice, selectedMaster) ?? undefined : undefined}
             onChange={(e) => setSellingPrice(e.target.value)}
           />
+          <label className="mb-3 flex items-center gap-2 text-sm text-[#4A4A46]">
+            <input
+              type="checkbox"
+              checked={assignActive}
+              onChange={(event) => setAssignActive(event.target.checked)}
+            />
+            Assignment Active (uncheck to hide from this franchise POS)
+          </label>
           <p className="mb-3 text-[11px] text-[#8A8A84]">
             Must be greater than 0 and strictly less than the master price
             {selectedMaster != null ? ` (${formatINR(selectedMaster)})` : ''}.

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -43,11 +45,29 @@ class PublicProductListResponse(BaseModel):
     total: int
 
 
+class EnquiryType(StrEnum):
+    GENERAL = 'GENERAL'
+    FRANCHISE = 'FRANCHISE'
+    COMPLAINT = 'COMPLAINT'
+    FEEDBACK = 'FEEDBACK'
+    OTHER = 'OTHER'
+
+
+ENQUIRY_TYPE_LABELS = {
+    EnquiryType.GENERAL: 'General Enquiry',
+    EnquiryType.FRANCHISE: 'Franchise Enquiry',
+    EnquiryType.COMPLAINT: 'Complaint',
+    EnquiryType.FEEDBACK: 'Feedback',
+    EnquiryType.OTHER: 'Other',
+}
+
+
 class ContactEnquiryRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: str = Field(min_length=1, max_length=20)
     email: EmailStr
     message: str = Field(min_length=1, max_length=2000)
+    enquiry_type: EnquiryType = EnquiryType.GENERAL
     website: str | None = Field(default=None, max_length=200)
 
     @field_validator('name', 'phone', 'message', mode='before')
@@ -71,3 +91,12 @@ class ContactEnquiryRequest(BaseModel):
 
 class ContactEnquiryResponse(BaseModel):
     message: str
+
+
+class PublicContactOptions(BaseModel):
+    phone: str | None = None
+    whatsapp: str | None = None
+    email: str | None = None
+    whatsapp_url: str | None = None
+    tel_url: str | None = None
+    mailto_url: str | None = None

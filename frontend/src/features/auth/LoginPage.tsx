@@ -8,7 +8,7 @@ import { useDocumentMeta } from '../../components/seo/useDocumentMeta';
 export function LoginPage() {
   const { signIn, session, profile, loading } = useAuth();
   useDocumentMeta('Staff Login | RealStick', 'Staff and POS login for RealStick Enterprise.');
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -22,7 +22,7 @@ export function LoginPage() {
     setFormError(null);
     setSubmitting(true);
     try {
-      await signIn(email.trim(), password);
+      await signIn(identifier.trim(), password);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to sign in. Check your credentials.';
@@ -55,15 +55,15 @@ export function LoginPage() {
           ) : null}
 
           <label className="mb-4 block text-xs font-semibold uppercase tracking-wide text-[#8A8A84]">
-            Email
+            Email/User ID
             <input
               required
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              type="text"
+              autoComplete="username"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
               className="mt-2 w-full rounded-lg border border-[#E0DDD5] px-3 py-3 outline-none focus:border-[#1A7A4A]"
-              placeholder="you@realstick.in"
+              placeholder="Enter email or user ID"
             />
           </label>
 

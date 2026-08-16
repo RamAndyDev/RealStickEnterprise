@@ -240,6 +240,31 @@ class FakeQuery:
                     row.setdefault('valid_from', None)
                     row.setdefault('valid_to', None)
                     row.setdefault('franchise_id', None)
+                    row.setdefault('promotion_id', None)
+                if self._table == 'promotions':
+                    row.setdefault('is_active', True)
+                    row.setdefault('description', None)
+                    row.setdefault('valid_from', None)
+                    row.setdefault('valid_to', None)
+                    code = (row.get('promo_code') or '').strip().lower()
+                    for existing in table_rows:
+                        if (existing.get('promo_code') or '').strip().lower() == code:
+                            raise Exception('duplicate key value violates unique constraint')
+                if self._table == 'promotion_franchises':
+                    for existing in table_rows:
+                        if (
+                            str(existing.get('promotion_id')) == str(row.get('promotion_id'))
+                            and str(existing.get('franchise_id')) == str(row.get('franchise_id'))
+                        ):
+                            raise Exception('duplicate key value violates unique constraint')
+                if self._table == 'profiles' and row.get('login_id'):
+                    needle = str(row['login_id']).strip().lower()
+                    for existing in table_rows:
+                        existing_login = str(existing.get('login_id') or '').strip().lower()
+                        if existing_login and existing_login == needle:
+                            raise Exception(
+                                'duplicate key value violates unique constraint on login_id'
+                            )
                 if self._table == 'orders':
                     row.setdefault('status', 'DRAFT')
                     row.setdefault('subtotal', 0)
@@ -404,7 +429,11 @@ class FakeAuthAdmin:
         from types import SimpleNamespace
         from uuid import uuid4
 
-        user = SimpleNamespace(id=str(uuid4()), email=email.strip().lower())
+        user = SimpleNamespace(
+            id=str(uuid4()),
+            email=email.strip().lower(),
+            password=attributes.get('password'),
+        )
         self._users.append(user)
         return SimpleNamespace(user=user)
 
@@ -448,6 +477,21 @@ class FakeAuth:
     def reset_password_for_email(self, email: str, options: dict | None = None):
         self.recovery_emails.append({'email': email.strip().lower(), 'options': options or {}})
 
+    def sign_in_with_password(self, email: str, password: str) -> dict[str, Any]:
+        needle = email.strip().lower()
+        for user in self.admin._users:
+            if (getattr(user, 'email', '') or '').strip().lower() != needle:
+                continue
+            if getattr(user, 'password', None) != password:
+                raise Exception('Invalid login credentials')
+            return {
+                'access_token': f'fake-access-{user.id}',
+                'refresh_token': f'fake-refresh-{user.id}',
+                'token_type': 'bearer',
+                'expires_in': 3600,
+            }
+        raise Exception('Invalid login credentials')
+
 
 class FakeStorageBucket:
     def __init__(self, db: 'FakeDatabase', bucket: str):
@@ -455,6 +499,9 @@ class FakeStorageBucket:
         self._bucket = bucket
 
     def upload(self, path: str, content: bytes, file_options: dict | None = None):
+        if getattr(self._db, 'fail_next_storage_upload', False):
+            self._db.fail_next_storage_upload = False
+            raise Exception('storage upload failed')
         self._db.storage_objects[(self._bucket, path)] = {
             'content': content,
             'options': file_options or {},
@@ -473,9 +520,20 @@ class FakeStorageBucket:
 class FakeStorage:
     def __init__(self, db: 'FakeDatabase'):
         self._db = db
+        self.buckets = {'gallery'}
 
     def from_(self, bucket: str) -> FakeStorageBucket:
         return FakeStorageBucket(self._db, bucket)
+
+    def get_bucket(self, name: str) -> dict[str, str]:
+        if name not in self.buckets:
+            raise Exception('Bucket not found')
+        return {'id': name}
+
+    def create_bucket(self, name: str, options: dict | None = None) -> dict[str, str]:
+        self.buckets.add(name)
+        self._db.created_buckets.append({'id': name, 'options': options or {}})
+        return {'id': name}
 
 
 class FakeDatabase:
@@ -495,6 +553,8 @@ class FakeDatabase:
         orders: list[dict] | None = None,
         order_items: list[dict] | None = None,
         gallery_items: list[dict] | None = None,
+        promotions: list[dict] | None = None,
+        promotion_franchises: list[dict] | None = None,
         auth_users: list[Any] | None = None,
     ):
         self.tables: dict[str, list[dict]] = {
@@ -511,12 +571,19 @@ class FakeDatabase:
             'orders': deepcopy(orders or []),
             'order_items': deepcopy(order_items or []),
             'gallery_items': deepcopy(gallery_items or []),
+            'promotions': deepcopy(promotions or []),
+            'promotion_franchises': deepcopy(promotion_franchises or []),
         }
         self.auth = FakeAuth(auth_users or [])
         self.storage_objects: dict[tuple[str, str], dict] = {}
         self.storage = FakeStorage(self)
+        self.created_buckets: list[dict[str, Any]] = []
         self.lock = RLock()
         self.fail_next_set_category_active = False
+        self.fail_next_storage_upload = False
+
+    def sign_in_with_password(self, email: str, password: str) -> dict[str, Any]:
+        return self.auth.sign_in_with_password(email, password)
 
     def enforce_selling_price(self, row: dict) -> None:
         selling = row.get('selling_price')
@@ -563,6 +630,18 @@ class FakeDatabase:
             raise Exception('SYSTEM_ADMIN profiles must not belong to a franchise')
         if role in {'FRANCHISE_OWNER', 'EMPLOYEE'} and not next_row.get('franchise_id'):
             raise Exception(f'{role} profiles must belong to a franchise')
+
+        login_id = next_row.get('login_id')
+        if login_id:
+            needle = str(login_id).strip().lower()
+            for existing in table_rows:
+                if existing is current_row:
+                    continue
+                existing_login = str(existing.get('login_id') or '').strip().lower()
+                if existing_login and existing_login == needle:
+                    raise Exception(
+                        'duplicate key value violates unique constraint on login_id'
+                    )
 
         if role != 'EMPLOYEE' or not next_row.get('is_active'):
             return

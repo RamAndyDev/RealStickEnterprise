@@ -69,3 +69,14 @@ textarea {
   padding: 0.5rem 0.75rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
+
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

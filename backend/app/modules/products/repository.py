@@ -6,7 +6,11 @@ from uuid import UUID
 from postgrest.exceptions import APIError
 
 from app.db.supabase import get_supabase
-from app.modules.products.constants import PRODUCT_IMAGE_BUCKET
+from app.modules.products.constants import (
+    ALLOWED_IMAGE_CONTENT_TYPES,
+    PRODUCT_IMAGE_BUCKET,
+    PRODUCT_IMAGE_MAX_BYTES,
+)
 
 CATEGORY_COLUMNS = (
     'id, name, display_order, is_active, created_at, updated_at'
@@ -266,6 +270,29 @@ class ProductRepository:
 
     # ── Storage ─────────────────────────────────────────────────────────────
 
+    def ensure_product_images_bucket(self) -> None:
+        storage = self._db.storage
+        getter = getattr(storage, 'get_bucket', None)
+        creator = getattr(storage, 'create_bucket', None)
+        if callable(getter):
+            try:
+                getter(PRODUCT_IMAGE_BUCKET)
+                return
+            except Exception:
+                pass
+        if callable(creator):
+            try:
+                creator(
+                    PRODUCT_IMAGE_BUCKET,
+                    {
+                        'public': True,
+                        'file_size_limit': PRODUCT_IMAGE_MAX_BYTES,
+                        'allowed_mime_types': list(ALLOWED_IMAGE_CONTENT_TYPES),
+                    },
+                )
+            except Exception:
+                pass
+
     def upload_product_image(
         self,
         *,
@@ -274,6 +301,7 @@ class ProductRepository:
         content_type: str,
     ) -> str:
         """Upload to product-images bucket; returns public URL."""
+        self.ensure_product_images_bucket()
         bucket = self._db.storage.from_(PRODUCT_IMAGE_BUCKET)
         bucket.upload(
             path,

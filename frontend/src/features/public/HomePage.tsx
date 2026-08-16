@@ -6,7 +6,7 @@ import { PublicPageMeta } from '../../components/layout/PublicLayout';
 import { fetchPublicProducts } from '../../lib/publicApi';
 import { ProductImage } from '../products/ProductImage';
 import { categoryColor } from '../products/categoryColors';
-import { HeroArt } from './HeroArt';
+import { BrandHero } from './HeroArt';
 
 export function PublicHomePage() {
   const productsQuery = useQuery({
@@ -50,7 +50,7 @@ export function PublicHomePage() {
             </div>
           </div>
           <div className="rs-fade-up rs-fade-up-delay">
-            <HeroArt />
+            <BrandHero />
           </div>
         </div>
       </section>
@@ -133,7 +133,9 @@ export function PublicHomePage() {
           </div>
           <div className="flex flex-wrap gap-3">
             <Link to="/gallery">
-              <Button className="min-h-11 bg-white text-[#0D4F2E] hover:bg-[#E6F4EC]">View Gallery</Button>
+              <Button variant="onDark" className="min-h-11">
+                View Gallery
+              </Button>
             </Link>
             <Link to="/contact">
               <Button variant="outline" className="min-h-11 border-white text-white hover:bg-white/10">

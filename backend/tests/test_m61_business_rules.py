@@ -205,7 +205,7 @@ def test_owner_employee_scope_and_limit_remain(client, auth_header_factory):
     created = client.post(
         '/api/v1/owner/employees',
         headers=_owner(auth_header_factory),
-        json={'full_name': 'M61 Hire', 'email': 'm61.hire@realstick.in'},
+        json={'full_name': 'M61 Hire', 'login_id': 'EMPM61', 'password': 'TestPass12'},
     )
     assert created.status_code == 201
     employee_id = created.json()['user']['id']
@@ -791,14 +791,15 @@ def test_employee_still_logs_in_and_owner_can_reset_password(client, auth_header
     reset = client.post(
         f'/api/v1/owner/employees/{EMPLOYEE_ID}/reset-password',
         headers=_owner(auth_header_factory),
+        json={'new_password': 'kept-backend-reset-99', 'confirm_password': 'kept-backend-reset-99'},
     )
     assert reset.status_code == 200
-    assert reset.json()['password_setup'] == 'recovery_email_sent'
-    assert any(item['email'] == 'employee@realstick.in' for item in fake_db.auth.recovery_emails)
+    assert reset.json()['password_setup'] == 'password_set'
+    assert not fake_db.auth.recovery_emails
 
     own_password = client.post(
         '/api/v1/auth/change-password',
         headers=_employee(auth_header_factory),
         json={'new_password': 'kept-backend-reset-99'},
     )
-    assert own_password.status_code == 200
+    assert own_password.status_code == 403

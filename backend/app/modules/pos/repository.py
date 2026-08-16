@@ -17,7 +17,7 @@ ORDER_COLUMNS = (
 
 OFFER_COLUMNS = (
     'id, name, description, discount_type, discount_value, is_active, '
-    'valid_from, valid_to, franchise_id, created_at, updated_at'
+    'valid_from, valid_to, franchise_id, promotion_id, created_at, updated_at'
 )
 
 ITEM_COLUMNS = (
@@ -82,6 +82,32 @@ class PosRepository:
             .execute()
         )
         return list(response.data or [])
+
+    def list_promotions(self) -> list[dict[str, Any]]:
+        response = (
+            self._db.table('promotions')
+            .select(
+                'id, name, description, promo_code, valid_from, valid_to, is_active, '
+                'created_at, updated_at'
+            )
+            .execute()
+        )
+        return list(response.data or [])
+
+    def list_promotion_franchise_map(self, promotion_ids: list[str]) -> dict[str, list[str]]:
+        unique_ids = [pid for pid in dict.fromkeys(promotion_ids) if pid]
+        if not unique_ids:
+            return {}
+        response = (
+            self._db.table('promotion_franchises')
+            .select('promotion_id, franchise_id')
+            .in_('promotion_id', unique_ids)
+            .execute()
+        )
+        mapping: dict[str, list[str]] = {pid: [] for pid in unique_ids}
+        for row in response.data or []:
+            mapping.setdefault(str(row['promotion_id']), []).append(str(row['franchise_id']))
+        return mapping
 
     def get_active_gst(self) -> dict[str, Any] | None:
         response = (

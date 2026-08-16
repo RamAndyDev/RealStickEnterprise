@@ -42,6 +42,7 @@ export function ProductDetailPage() {
   const [showAssign, setShowAssign] = useState(false);
   const [franchiseId, setFranchiseId] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
+  const [assignActive, setAssignActive] = useState(true);
   const [editAssignment, setEditAssignment] = useState<FranchiseAssignmentRow | null>(null);
   const [editPrice, setEditPrice] = useState('');
 
@@ -99,12 +100,13 @@ export function ProductDetailPage() {
       assignFranchiseProduct(franchiseId, {
         product_id: productId!,
         selling_price: Number(sellingPrice),
-        is_active: true,
+        is_active: assignActive,
       }),
     onSuccess: async () => {
       setShowAssign(false);
       setFranchiseId('');
       setSellingPrice('');
+      setAssignActive(true);
       setFeedback('Product assigned to franchise.');
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-product-assignments', productId] });
@@ -281,7 +283,7 @@ export function ProductDetailPage() {
                   color: row.is_active ? '#1A7A4A' : '#8A8A84',
                 }}
               >
-                {row.is_active ? 'Active' : 'Hidden'}
+                {row.is_active ? 'Assignment Active' : 'Assignment Hidden'}
               </button>
             </div>
           ))}
@@ -311,6 +313,14 @@ export function ProductDetailPage() {
             error={sellingPrice ? sellingPriceError(sellingPrice, product.price) ?? undefined : undefined}
             onChange={(e) => setSellingPrice(e.target.value)}
           />
+          <label className="mb-3 flex items-center gap-2 text-sm text-[#4A4A46]">
+            <input
+              type="checkbox"
+              checked={assignActive}
+              onChange={(event) => setAssignActive(event.target.checked)}
+            />
+            Assignment Active (uncheck to hide from this franchise POS)
+          </label>
           <p className="mb-3 text-[11px] text-[#8A8A84]">
             Master price for this item: {formatINR(product.price)}. Selling price must be greater
             than 0 and strictly less than the master price.

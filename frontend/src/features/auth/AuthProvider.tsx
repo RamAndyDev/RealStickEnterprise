@@ -9,7 +9,7 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { fetchCurrentProfile } from '../../lib/api';
+import { api, fetchCurrentProfile } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import type { AuthProfile, UserRole } from '../../types/auth';
 
@@ -18,7 +18,7 @@ type AuthContextValue = {
   profile: AuthProfile | null;
   loading: boolean;
   error: string | null;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (identifier: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -94,18 +94,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loadProfile]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (identifier: string, password: string) => {
     setError(null);
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (signInError) {
-      setError(signInError.message);
-      throw signInError;
+    try {
+      const { data } = await api.post<{
+        access_token: string;
+        refresh_token: string;
+      }>('/auth/login', { identifier, password });
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      if (sessionError || !sessionData.session) {
+        const message = sessionError?.message || 'Unable to start a session.';
+        setError(message);
+        throw new Error(message);
+      }
+      setSession(sessionData.session);
+      await loadProfile(sessionData.session);
+    } catch (err) {
+      const message = toErrorMessage(err, 'Unable to sign in. Check your credentials.');
+      setError(message);
+      throw err instanceof Error ? err : new Error(message);
     }
-    setSession(data.session);
-    await loadProfile(data.session);
   }, [loadProfile]);
 
   const signOut = useCallback(async () => {

@@ -45,6 +45,7 @@ class CurrentProfile(BaseModel):
 
     id: UUID
     email: str | None = None
+    login_id: str | None = None
     full_name: str
     role: UserRole
     franchise_id: UUID | None = None
@@ -150,7 +151,7 @@ def get_current_profile(
         response = (
             get_supabase()
             .table('profiles')
-            .select('id, full_name, role, franchise_id, phone, is_active, created_at')
+            .select('id, full_name, role, franchise_id, phone, is_active, created_at, login_id')
             .eq('id', str(user.id))
             .limit(1)
             .execute()
@@ -182,9 +183,16 @@ def get_current_profile(
     if role in {UserRole.FRANCHISE_OWNER, UserRole.EMPLOYEE} and franchise_id is None:
         raise _forbidden(f'{role.value} profile must belong to a franchise')
 
+    from app.modules.auth.identity import is_internal_employee_identity
+
+    email = user.email
+    if role == UserRole.EMPLOYEE or is_internal_employee_identity(email):
+        email = None
+
     return CurrentProfile(
         id=UUID(str(row['id'])),
-        email=user.email,
+        email=email,
+        login_id=row.get('login_id'),
         full_name=row['full_name'],
         role=role,
         franchise_id=franchise_id,

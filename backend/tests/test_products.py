@@ -403,6 +403,34 @@ def test_product_image_can_be_removed(client, auth_header_factory, fake_db):
     assert ('product-images', path) not in fake_db.storage_objects
 
 
+def test_product_image_storage_failure_returns_503(client, auth_header_factory, fake_db):
+    fake_db.fail_next_storage_upload = True
+    response = _upload(
+        client,
+        _admin(auth_header_factory),
+        PRODUCT_NIMBU,
+        JPEG_BYTES,
+        'fail.jpg',
+        'image/jpeg',
+    )
+    assert response.status_code == 503
+    assert 'unable to upload' in response.json()['detail'].lower()
+
+
+def test_product_images_bucket_is_created_on_upload(client, auth_header_factory, fake_db):
+    assert 'product-images' not in fake_db.storage.buckets
+    response = _upload(
+        client,
+        _admin(auth_header_factory),
+        PRODUCT_NIMBU,
+        JPEG_BYTES,
+        'bucket.jpg',
+        'image/jpeg',
+    )
+    assert response.status_code == 200
+    assert 'product-images' in fake_db.storage.buckets
+
+
 def test_non_admin_cannot_upload_product_images(client, auth_header_factory):
     for headers in (_owner(auth_header_factory), _employee(auth_header_factory)):
         response = _upload(

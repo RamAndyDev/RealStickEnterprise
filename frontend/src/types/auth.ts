@@ -3,6 +3,7 @@ export type UserRole = 'SYSTEM_ADMIN' | 'FRANCHISE_OWNER' | 'EMPLOYEE';
 export type AuthProfile = {
   id: string;
   email: string | null;
+  login_id?: string | null;
   full_name: string;
   role: UserRole;
   franchise_id: string | null;

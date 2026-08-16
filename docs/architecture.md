@@ -3,7 +3,8 @@
 ```text
 React Browser
    |
-   | Supabase Auth (email/password session + JWT)
+   | POST /api/v1/auth/login (email or User ID + password)
+   | Supabase Auth session (setSession) + JWT
    | HTTPS / JSON + Authorization: Bearer <access_token>
    v
 FastAPI
@@ -20,7 +21,9 @@ Supabase PostgreSQL
 ## Frontend
 `src/app`, `src/components`, `src/features`, `src/lib`, `src/types`
 
-- Browser talks to Supabase Auth with the **anon** key only.
+- Staff login uses FastAPI `POST /auth/login`, then `supabase.auth.setSession`. The browser does not query `profiles` to verify passwords.
+- Login field placeholder is **Email/User ID**. Admin/Owner use email. Employees use User ID only.
+- After 10 minutes of inactivity (mouse, keyboard, touch, pointer, or navigation — not background polling), the client signs out through Supabase Auth and redirects to `/login`.
 - Application authorization is enforced by FastAPI using the verified JWT + profile.
 
 ## Backend
@@ -65,7 +68,8 @@ Read-only aggregation sits on `public.orders` / `public.order_items` / `public.f
 - `FRANCHISE_OWNER` is scoped to `profile.franchise_id`.
 - `EMPLOYEE` is rejected by management `/reports` and dashboard endpoints.
 - `EMPLOYEE` Daily Sales (`GET /reports/employee/daily`) is a single-day operational view scoped to `profile.franchise_id`. Optional `date=YYYY-MM-DD` selects a past or current UTC day (default today). Future dates are rejected. Admin and Owner cannot use it.
-- Authenticated users change their own password via `POST /auth/change-password`. The API uses the authenticated profile id and ignores any client-supplied `user_id`. Employee navigation exposes Change Password; Admin/Owner password-reset flows are unchanged.
+- `SYSTEM_ADMIN` and `FRANCHISE_OWNER` change their own password via `POST /auth/change-password`. The API uses the authenticated profile id and ignores any client-supplied `user_id`. Employees cannot change or recover passwords; the Franchise Owner resets an employee password through Supabase Auth admin update. Passwords are never stored in `public.profiles`.
+- Employees have a `profiles.login_id` (User ID) and no business email. Supabase Auth still requires an identity value; the backend uses `{login_id}@employees.invalid` internally and never displays it as an email account.
 - Revenue = `SUM(orders.total_amount)` for completed orders. Average order = revenue / orders, rounded to the nearest rupee.
 - Product rankings use snapshot `product_name_snapshot` and `unit_price × quantity`. Order-level discount and GST are not allocated to products.
 - Admin "Active Outlets" = `COUNT(franchises) WHERE status = ACTIVE`, including outlets with zero sales.
@@ -88,7 +92,18 @@ Owner Menu/Pricing is `/owner/menu`. Public `/menu` is a price-free catalogue. B
 
 Public catalogue and gallery reads go through FastAPI with the service-role key. Anonymous PostgREST access to `products` is not enabled. The previous anon select policy on `gallery_items` was removed in migration `0008`; public gallery reads use `/api/v1/public/gallery`.
 
-Contact enquiries are emailed with the Resend HTTP API (`RESEND_API_KEY`, `CONTACT_TO_EMAIL`, `CONTACT_FROM_EMAIL`). No `contact_enquiries` table is created.
+Contact enquiries are emailed with the Resend HTTP API (`RESEND_API_KEY`, `CONTACT_TO_EMAIL`, `CONTACT_FROM_EMAIL`). Enquiry types include General Enquiry, Franchise Enquiry, Complaint, Feedback, and Other. This is not a separate complaints system. Optional public actions (Call / WhatsApp / Email) use `PUBLIC_CONTACT_*` and stay disabled when unset. No `contact_enquiries` table is created.
+
+## Promotions vs Offers
+
+Admin manages **Promotions** (`public.promotions` + `public.promotion_franchises`). Owner manages **Offers** on the existing `public.discounts` table. `discounts.promotion_id` is optional:
+
+- `NULL` — franchise-local offer (independent of Admin)
+- set — offer is associated with an Admin promotion; POS availability also requires the promotion to be active, in validity, and to include the employee's franchise
+
+The Admin promotion does not set the franchise discount percentage. Customers never see or enter promo codes. One offer per order remains the M6/M8 rule. GST calculation and completed-order snapshots are unchanged.
+
+Migration `0009` adds `profiles.login_id`, promotions tables, `discounts.promotion_id`, and the `product-images` storage bucket. Migrations `0001`–`0008` are frozen.
 
 POS tablet work is layout-only: AppShell uses a drawer below `lg` on `/pos`, the cart stacks under the product grid below `lg`, and touch targets are enlarged. Checkout, GST, offers, bill numbering, and thermal receipt CSS are unchanged.
 

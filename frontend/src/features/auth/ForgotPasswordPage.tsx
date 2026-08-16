@@ -34,14 +34,15 @@ export function ForgotPasswordPage() {
         <div className="mb-8 text-center text-white">
           <div className="font-serif text-5xl font-bold">RealStick™</div>
           <div className="mt-2 text-xs uppercase tracking-[.2em] text-white/45">
-            Password reset
+            Password reset for email accounts
           </div>
         </div>
 
         <form onSubmit={onSubmit} className="rounded-2xl bg-white p-7 shadow-2xl">
           <h1 className="mb-2 text-xl font-bold">Reset your password</h1>
           <p className="mb-6 text-sm text-[#8A8A84]">
-            Enter your account email. We will send a Supabase recovery link.
+            Enter your admin or owner email. Employees do not have email recovery — ask the
+            franchise owner to reset the password.
           </p>
 
           {error ? (

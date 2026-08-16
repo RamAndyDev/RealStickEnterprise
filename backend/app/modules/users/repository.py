@@ -8,8 +8,36 @@ from postgrest.exceptions import APIError
 from app.core.config import get_settings
 from app.db.supabase import get_supabase
 
+
+def _auth_users_from_result(result: Any) -> list[Any]:
+    if result is None:
+        return []
+    if isinstance(result, list):
+        return result
+    users = getattr(result, 'users', None)
+    if users is not None:
+        return list(users)
+    if isinstance(result, dict):
+        nested = result.get('users') or result.get('data')
+        if isinstance(nested, list):
+            return nested
+    return []
+
+
+def _auth_user_identity(user: Any) -> tuple[str | None, str | None]:
+    if user is None:
+        return None, None
+    if isinstance(user, dict):
+        user_id = user.get('id')
+        raw_email = user.get('email')
+    else:
+        user_id = getattr(user, 'id', None)
+        raw_email = getattr(user, 'email', None)
+    email = str(raw_email).strip().lower() if raw_email else None
+    return (str(user_id) if user_id else None, email)
+
 PROFILE_COLUMNS = (
-    'id, full_name, role, franchise_id, phone, is_active, created_at, updated_at'
+    'id, full_name, role, franchise_id, phone, is_active, created_at, updated_at, login_id'
 )
 
 
@@ -36,6 +64,30 @@ class UsersRepository:
             query = query.eq('is_active', is_active)
         response = query.order('created_at', desc=True).execute()
         return list(response.data or [])
+
+    def get_profile_by_login_id(self, login_id: str) -> dict[str, Any] | None:
+        needle = login_id.strip()
+        if not needle:
+            return None
+        response = (
+            self._db.table('profiles')
+            .select(PROFILE_COLUMNS)
+            .ilike('login_id', needle)
+            .limit(20)
+            .execute()
+        )
+        rows = response.data or []
+        for row in rows:
+            existing = str(row.get('login_id') or '')
+            if existing.lower() == needle.lower():
+                return row
+        return None
+
+    def get_profile_by_auth_email(self, email: str) -> dict[str, Any] | None:
+        user_id = self.find_auth_user_id_by_email(email)
+        if not user_id:
+            return None
+        return self.get_profile(UUID(user_id))
 
     def get_profile(self, profile_id: UUID) -> dict[str, Any] | None:
         response = (
@@ -133,22 +185,26 @@ class UsersRepository:
             page = 1
             per_page = 200
             while page <= 20:
-                result = self._db.auth.admin.list_users(page=page, per_page=per_page)
-                users = getattr(result, 'users', None) or []
+                try:
+                    result = self._db.auth.admin.list_users(page=page, per_page=per_page)
+                except TypeError:
+                    result = self._db.auth.admin.list_users()
+                    users = _auth_users_from_result(result)
+                    for user in users:
+                        user_id, email = _auth_user_identity(user)
+                        if user_id:
+                            emails[user_id] = email
+                    break
+                users = _auth_users_from_result(result)
                 for user in users:
-                    user_id = str(getattr(user, 'id'))
-                    raw_email = getattr(user, 'email', None)
-                    emails[user_id] = str(raw_email).strip().lower() if raw_email else None
+                    user_id, email = _auth_user_identity(user)
+                    if user_id:
+                        emails[user_id] = email
                 if len(users) < per_page:
                     break
                 page += 1
-        except TypeError:
-            result = self._db.auth.admin.list_users()
-            users = getattr(result, 'users', None) or []
-            for user in users:
-                user_id = str(getattr(user, 'id'))
-                raw_email = getattr(user, 'email', None)
-                emails[user_id] = str(raw_email).strip().lower() if raw_email else None
+        except Exception:
+            return emails
         return emails
 
     def get_auth_email(self, user_id: str) -> str | None:
@@ -157,8 +213,16 @@ class UsersRepository:
         except Exception:
             return self.list_auth_emails().get(user_id)
         user = getattr(result, 'user', result)
-        raw_email = getattr(user, 'email', None)
-        return str(raw_email).strip().lower() if raw_email else None
+        _, email = _auth_user_identity(user)
+        return email
+
+    def sign_in_with_password(self, email: str, password: str) -> dict[str, Any]:
+        signer = getattr(self._db, 'sign_in_with_password', None)
+        if callable(signer):
+            return signer(email, password)
+        from app.modules.auth.login import supabase_password_grant
+
+        return supabase_password_grant(email, password)
 
     def find_auth_user_id_by_email(self, email: str) -> str | None:
         normalized = email.strip().lower()
@@ -205,6 +269,15 @@ class UsersRepository:
 
     def password_reset_redirect_url(self) -> str:
         return get_settings().password_reset_redirect_url
+
+    @staticmethod
+    def is_login_id_violation(exc: Exception) -> bool:
+        message = str(exc).lower()
+        if isinstance(exc, APIError):
+            message = f'{getattr(exc, "message", "")} {exc}'.lower()
+        return 'login_id' in message and (
+            'duplicate' in message or 'unique' in message or '23505' in message
+        )
 
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:

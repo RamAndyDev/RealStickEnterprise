@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from uuid import UUID
 
@@ -36,6 +37,8 @@ from app.modules.products.schemas import (
     ProductListResponse,
     ProductUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _money(value: object) -> float:
@@ -342,6 +345,7 @@ class ProductService:
                 content_type=content_type,
             )
         except Exception as exc:
+            logger.exception('Product image storage upload failed')
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail='Unable to upload product image',

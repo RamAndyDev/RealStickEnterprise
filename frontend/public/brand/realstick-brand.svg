@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">RealStick</title>
+  <desc id="desc">Official RealStick brand mark  natural popsicles and kulfi.</desc>
+  <defs>
+    <linearGradient id="rs-mango" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F4C430"/>
+      <stop offset="100%" stop-color="#E8621A"/>
+    </linearGradient>
+    <linearGradient id="rs-berry" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F9A8D4"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+    <linearGradient id="rs-mint" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#86EFAC"/>
+      <stop offset="100%" stop-color="#1A7A4A"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" rx="80" fill="#F7F4EE"/>
+  <circle cx="400" cy="360" r="250" fill="#E6F4EC"/>
+  <g transform="translate(400 340)">
+    <g transform="rotate(-18) translate(-150 -210)">
+      <rect x="0" y="0" width="88" height="280" rx="44" fill="url(#rs-mango)"/>
+      <rect x="30" y="268" width="28" height="90" rx="8" fill="#E8D5B5"/>
+    </g>
+    <g transform="rotate(6) translate(-44 -240)">
+      <rect x="0" y="0" width="96" height="300" rx="48" fill="url(#rs-berry)"/>
+      <rect x="34" y="288" width="28" height="96" rx="8" fill="#E8D5B5"/>
+    </g>
+    <g transform="rotate(16) translate(70 -200)">
+      <rect x="0" y="0" width="88" height="270" rx="44" fill="url(#rs-mint)"/>
+      <rect x="30" y="258" width="28" height="86" rx="8" fill="#E8D5B5"/>
+    </g>
+  </g>
+  <text x="400" y="700" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="72" font-weight="700" fill="#0D4F2E">RealStick"</text>
+  <text x="400" y="742" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" letter-spacing="4" fill="#1A7A4A">REAL FRUITS. REAL GOODNESS.</text>
+</svg>

@@ -6,8 +6,10 @@ from fastapi import HTTPException, status
 
 from app.core.roles import UserRole
 from app.core.security import CurrentProfile
+from app.modules.auth.identity import employee_auth_identity, is_internal_employee_identity
 from app.modules.auth.provisioning import (
     AuthProvisionResult,
+    _extract_user_id,
     provision_auth_user,
     send_password_recovery_email,
 )
@@ -19,6 +21,7 @@ from app.modules.users.schemas import (
     AdminUserUpdate,
     EmployeeCreate,
     EmployeeListResponse,
+    EmployeePasswordResetRequest,
     EmployeeUpdate,
     ManagedUser,
     PasswordResetResponse,
@@ -60,6 +63,7 @@ class UsersService:
                 if needle in item.full_name.lower()
                 or needle in (item.email or '').lower()
                 or needle in (item.phone or '').lower()
+                or needle in (item.login_id or '').lower()
                 or needle in (item.franchise_name or '').lower()
             ]
         return UserListResponse(items=items, total=len(items))
@@ -203,7 +207,13 @@ class UsersService:
 
     def create_employee(self, owner: CurrentProfile, data: EmployeeCreate) -> UserCreateResponse:
         franchise_id = self._owner_franchise_id(owner)
-        return self._create_employee(franchise_id, data.full_name, data.email, data.phone)
+        return self._create_employee(
+            franchise_id,
+            data.full_name,
+            data.login_id,
+            data.password,
+            data.phone,
+        )
 
     def update_employee(
         self,
@@ -213,6 +223,18 @@ class UsersService:
     ) -> ManagedUser:
         existing = self._employee_in_owner_franchise(owner, employee_id)
         updates = data.model_dump(exclude_unset=True)
+        if 'login_id' in updates:
+            new_login_id = updates['login_id']
+            current_login_id = existing.get('login_id')
+            if current_login_id and str(current_login_id) == new_login_id:
+                updates.pop('login_id')
+            else:
+                conflict = self.repo.get_profile_by_login_id(new_login_id)
+                if conflict and str(conflict.get('id')) != str(employee_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail='User ID is already in use',
+                    )
         if updates.get('is_active') is True:
             self._assert_employee_capacity(
                 UUID(str(existing['franchise_id'])),
@@ -230,9 +252,20 @@ class UsersService:
         self,
         owner: CurrentProfile,
         employee_id: UUID,
+        data: EmployeePasswordResetRequest,
     ) -> PasswordResetResponse:
         self._employee_in_owner_franchise(owner, employee_id)
-        return self.reset_password(employee_id, allow_employee=True)
+        try:
+            self.repo.update_auth_password(str(employee_id), data.new_password)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to reset employee password',
+            ) from exc
+        return PasswordResetResponse(
+            password_setup='password_set',
+            message='Employee password updated. Share the new password with the employee offline.',
+        )
 
     def change_own_password(self, profile: CurrentProfile, new_password: str) -> None:
         try:
@@ -274,32 +307,61 @@ class UsersService:
         self,
         franchise_id: UUID,
         full_name: str,
-        email: str,
+        login_id: str,
+        password: str,
         phone: str | None,
     ) -> UserCreateResponse:
         if not self.repo.get_franchise(franchise_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Franchise not found')
         self._assert_employee_capacity(franchise_id)
+        if self.repo.get_profile_by_login_id(login_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='User ID is already in use',
+            )
 
-        provisioned = self._provision_auth_user(email, full_name)
+        internal_email = employee_auth_identity(login_id)
+        if self.repo.find_auth_user_id_by_email(internal_email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='User ID is already in use',
+            )
+
+        created_id: str | None = None
         try:
+            created = self.repo.create_auth_user_with_temp_password(
+                email=internal_email,
+                full_name=full_name,
+                password=password,
+            )
+            created_id = _extract_user_id(created) or self.repo.find_auth_user_id_by_email(
+                internal_email
+            )
+            if not created_id:
+                raise RuntimeError('Auth user creation did not return an id')
             profile = self.repo.create_profile(
                 {
-                    'id': provisioned.auth_user_id,
+                    'id': created_id,
                     'full_name': full_name,
                     'role': UserRole.EMPLOYEE.value,
                     'franchise_id': str(franchise_id),
                     'phone': phone,
+                    'login_id': login_id,
                     'is_active': True,
                 }
             )
+        except HTTPException:
+            if created_id:
+                self._rollback_auth_user(created_id)
+            raise
         except Exception as exc:
-            self._rollback_auth_user(provisioned.auth_user_id)
+            if created_id:
+                self._rollback_auth_user(created_id)
             self._raise_profile_write_error(exc, action='create')
         return UserCreateResponse(
-            user=self._hydrate([profile], fallback_email=email)[0],
-            password_setup=provisioned.password_setup,
-            message=provisioned.message,
+            user=self._hydrate([profile])[0],
+            password_setup='password_set',
+            message='Employee created. Share the User ID and password with the employee offline.',
         )
 
     def _provision_auth_user(self, email: str, full_name: str) -> AuthProvisionResult:
@@ -412,13 +474,22 @@ class UsersService:
         for row in rows:
             user_id = str(row['id'])
             franchise_raw = row.get('franchise_id')
+            role = UserRole(row['role'])
+            email = emails.get(user_id)
+            if not email and (len(rows) == 1 or role != UserRole.EMPLOYEE):
+                email = self.repo.get_auth_email(user_id) or (
+                    fallback_email if len(rows) == 1 else None
+                )
+            if role == UserRole.EMPLOYEE or is_internal_employee_identity(email):
+                email = None
             items.append(
                 ManagedUser(
                     id=row['id'],
                     full_name=row['full_name'],
-                    email=emails.get(user_id) or (fallback_email if len(rows) == 1 else None),
+                    email=email,
+                    login_id=row.get('login_id'),
                     phone=row.get('phone'),
-                    role=UserRole(row['role']),
+                    role=role,
                     franchise_id=franchise_raw,
                     franchise_name=names.get(str(franchise_raw)) if franchise_raw else None,
                     is_active=bool(row.get('is_active', True)),
@@ -433,6 +504,11 @@ class UsersService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(exc) if 'Maximum of' in str(exc) else 'Maximum of 10 active employees allowed per franchise',
+            ) from exc
+        if self.repo.is_login_id_violation(exc):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='User ID is already in use',
             ) from exc
         if self.repo.is_unique_violation(exc):
             raise HTTPException(

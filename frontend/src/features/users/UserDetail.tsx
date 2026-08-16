@@ -1,7 +1,7 @@
 import { Badge } from '../../components/ui';
 import type { ManagedUser } from '../../types/user';
 import { formatDate } from '../franchises/status';
-import { roleLabel, roleTone } from './labels';
+import { employeeUserIdLabel, roleLabel, roleTone } from './labels';
 
 export function UserDetail({
   user,
@@ -16,10 +16,17 @@ export function UserDetail({
         <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Name</dt>
         <dd className="mt-1 font-medium">{user.full_name}</dd>
       </div>
-      <div>
-        <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Email</dt>
-        <dd className="mt-1 font-medium">{user.email ?? '—'}</dd>
-      </div>
+      {user.role === 'EMPLOYEE' ? (
+        <div>
+          <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">User ID</dt>
+          <dd className="mt-1 font-medium">{employeeUserIdLabel(user.login_id)}</dd>
+        </div>
+      ) : (
+        <div>
+          <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Email</dt>
+          <dd className="mt-1 font-medium">{user.email ?? '—'}</dd>
+        </div>
+      )}
       <div>
         <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Phone</dt>
         <dd className="mt-1 font-medium">{user.phone ?? '—'}</dd>

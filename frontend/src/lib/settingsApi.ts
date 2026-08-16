@@ -1,5 +1,13 @@
 import { api } from './api';
-import type { GstSettings, Offer, OfferListResponse, OfferWritePayload } from '../types/settings';
+import type {
+  GstSettings,
+  Offer,
+  OfferListResponse,
+  OfferWritePayload,
+  Promotion,
+  PromotionListResponse,
+  PromotionWritePayload,
+} from '../types/settings';
 
 export async function fetchGstSettings(): Promise<GstSettings> {
   const { data } = await api.get<GstSettings>('/admin/gst');
@@ -11,17 +19,40 @@ export async function updateGstSettings(rate: number): Promise<GstSettings> {
   return data;
 }
 
-export async function listOffers(): Promise<OfferListResponse> {
-  const { data } = await api.get<OfferListResponse>('/admin/offers');
+export async function listOwnerOffers(): Promise<OfferListResponse> {
+  const { data } = await api.get<OfferListResponse>('/owner/offers');
   return data;
 }
 
-export async function createOffer(payload: OfferWritePayload): Promise<Offer> {
-  const { data } = await api.post<Offer>('/admin/offers', payload);
+export async function createOwnerOffer(payload: OfferWritePayload): Promise<Offer> {
+  const { data } = await api.post<Offer>('/owner/offers', payload);
   return data;
 }
 
-export async function updateOffer(id: string, payload: Partial<OfferWritePayload>): Promise<Offer> {
-  const { data } = await api.patch<Offer>(`/admin/offers/${id}`, payload);
+export async function updateOwnerOffer(id: string, payload: Partial<OfferWritePayload>): Promise<Offer> {
+  const { data } = await api.patch<Offer>(`/owner/offers/${id}`, payload);
+  return data;
+}
+
+export async function listOwnerPromotions(): Promise<PromotionListResponse> {
+  const { data } = await api.get<PromotionListResponse>('/owner/promotions');
+  return data;
+}
+
+export async function listPromotions(): Promise<PromotionListResponse> {
+  const { data } = await api.get<PromotionListResponse>('/admin/promotions');
+  return data;
+}
+
+export async function createPromotion(payload: PromotionWritePayload): Promise<Promotion> {
+  const { data } = await api.post<Promotion>('/admin/promotions', payload);
+  return data;
+}
+
+export async function updatePromotion(
+  id: string,
+  payload: Partial<PromotionWritePayload>,
+): Promise<Promotion> {
+  const { data } = await api.patch<Promotion>(`/admin/promotions/${id}`, payload);
   return data;
 }

@@ -4,6 +4,7 @@ export type ManagedUser = {
   id: string;
   full_name: string;
   email: string | null;
+  login_id?: string | null;
   phone: string | null;
   role: UserRole;
   franchise_id: string | null;
@@ -40,12 +41,15 @@ export type UserUpdatePayload = {
 
 export type EmployeeCreatePayload = {
   full_name: string;
-  email: string;
+  login_id: string;
+  password: string;
+  confirm_password: string;
   phone?: string | null;
 };
 
 export type EmployeeUpdatePayload = {
   full_name?: string;
+  login_id?: string;
   phone?: string | null;
   is_active?: boolean;
 };

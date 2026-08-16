@@ -59,6 +59,7 @@ def _profile(
     is_active: bool = True,
     full_name: str = 'Test User',
     phone: str | None = None,
+    login_id: str | None = None,
 ):
     now = datetime.now(timezone.utc).isoformat()
     return {
@@ -67,6 +68,7 @@ def _profile(
         'role': role.value,
         'franchise_id': str(franchise_id) if franchise_id else None,
         'phone': phone,
+        'login_id': login_id,
         'is_active': is_active,
         'created_at': now,
         'updated_at': now,
@@ -86,6 +88,7 @@ PROFILES = [
         role=UserRole.EMPLOYEE,
         franchise_id=FRANCHISE_A,
         full_name='Employee User',
+        login_id='EMP001',
     ),
     _profile(
         user_id=INACTIVE_ID,
@@ -93,12 +96,14 @@ PROFILES = [
         franchise_id=FRANCHISE_A,
         is_active=False,
         full_name='Inactive User',
+        login_id='EMP000',
     ),
     _profile(
         user_id=OWNER_CANDIDATE_ID,
         role=UserRole.EMPLOYEE,
         franchise_id=FRANCHISE_B,
         full_name='Owner Candidate',
+        login_id='EMP-CAND',
     ),
 ]
 
@@ -262,11 +267,15 @@ def fake_db():
         },
     ]
     auth_users = [
-        SimpleNamespace(id=str(OWNER_ID), email='owner@realstick.in'),
+        SimpleNamespace(id=str(OWNER_ID), email='owner@realstick.in', password='OwnerPass12'),
         SimpleNamespace(id=str(OWNER_CANDIDATE_ID), email='candidate@realstick.in'),
-        SimpleNamespace(id=str(ADMIN_ID), email='admin@realstick.in'),
-        SimpleNamespace(id=str(EMPLOYEE_ID), email='employee@realstick.in'),
-        SimpleNamespace(id=str(INACTIVE_ID), email='inactive@realstick.in'),
+        SimpleNamespace(id=str(ADMIN_ID), email='admin@realstick.in', password='AdminPass12'),
+        SimpleNamespace(
+            id=str(EMPLOYEE_ID),
+            email='emp001@employees.invalid',
+            password='EmpPass12',
+        ),
+        SimpleNamespace(id=str(INACTIVE_ID), email='emp000@employees.invalid'),
     ]
     product_categories = [
         {

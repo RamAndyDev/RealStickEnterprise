@@ -22,7 +22,14 @@ def _strip_header_value(value: str) -> str:
     return value.replace('\r', ' ').replace('\n', ' ').strip()
 
 
-def send_contact_email(*, name: str, phone: str, email: str, message: str) -> None:
+def send_contact_email(
+    *,
+    name: str,
+    phone: str,
+    email: str,
+    message: str,
+    enquiry_type: str = 'GENERAL',
+) -> None:
     settings = get_settings()
     api_key = (settings.resend_api_key or '').strip()
     to_email = (settings.contact_to_email or '').strip()
@@ -32,8 +39,10 @@ def send_contact_email(*, name: str, phone: str, email: str, message: str) -> No
         raise EmailDeliveryError(CONTACT_FAILURE_MESSAGE)
 
     safe_name = _strip_header_value(name)[:120]
-    subject = _strip_header_value(f'RealStick Website Enquiry - {safe_name}')
+    safe_type = _strip_header_value(enquiry_type)[:40]
+    subject = _strip_header_value(f'RealStick Website Enquiry ({safe_type}) - {safe_name}')
     body = (
+        f'Enquiry type: {safe_type}\n'
         f'Name: {name}\n'
         f'Phone: {phone}\n'
         f'Email: {email}\n'

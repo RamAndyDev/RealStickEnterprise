@@ -16,11 +16,28 @@ export async function fetchPublicGallery(): Promise<{ items: PublicGalleryItem[]
   return data;
 }
 
+export type EnquiryType = 'GENERAL' | 'FRANCHISE' | 'COMPLAINT' | 'FEEDBACK' | 'OTHER';
+
+export type PublicContactOptions = {
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  whatsapp_url: string | null;
+  tel_url: string | null;
+  mailto_url: string | null;
+};
+
+export async function fetchContactOptions(): Promise<PublicContactOptions> {
+  const { data } = await api.get<PublicContactOptions>('/public/contact-options');
+  return data;
+}
+
 export async function submitContactEnquiry(payload: {
   name: string;
   phone: string;
   email: string;
   message: string;
+  enquiry_type: EnquiryType;
   website?: string;
 }): Promise<{ message: string }> {
   const { data } = await api.post<{ message: string }>('/public/contact', payload);

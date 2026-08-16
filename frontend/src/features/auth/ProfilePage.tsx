@@ -21,10 +21,17 @@ export function ProfilePage() {
             <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Name</dt>
             <dd className="mt-1 font-medium">{profile.full_name}</dd>
           </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Email</dt>
-            <dd className="mt-1 font-medium">{profile.email ?? '—'}</dd>
-          </div>
+          {profile.role === 'EMPLOYEE' ? (
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">User ID</dt>
+              <dd className="mt-1 font-medium">{profile.login_id ?? '—'}</dd>
+            </div>
+          ) : (
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Email</dt>
+              <dd className="mt-1 font-medium">{profile.email ?? '—'}</dd>
+            </div>
+          )}
           <div>
             <dt className="text-xs uppercase tracking-wide text-[#8A8A84]">Phone</dt>
             <dd className="mt-1 font-medium">{profile.phone ?? '—'}</dd>

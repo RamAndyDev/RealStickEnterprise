@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.roles import UserRole
+from app.modules.auth.identity import validate_login_id
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -39,6 +40,7 @@ class ManagedUser(BaseModel):
     id: UUID
     full_name: str
     email: str | None = None
+    login_id: str | None = None
     phone: str | None = None
     role: UserRole
     franchise_id: UUID | None = None
@@ -128,7 +130,9 @@ class EmployeeCreate(BaseModel):
     model_config = ConfigDict(extra='ignore')
 
     full_name: str = Field(min_length=1, max_length=200)
-    email: str
+    login_id: str
+    password: str = Field(min_length=8, max_length=128)
+    confirm_password: str | None = Field(default=None, max_length=128)
     phone: str | None = Field(default=None, max_length=40)
 
     @field_validator('full_name', mode='before')
@@ -139,24 +143,36 @@ class EmployeeCreate(BaseModel):
             raise ValueError('Employee name is required')
         return stripped
 
-    @field_validator('email', mode='before')
+    @field_validator('login_id', mode='before')
     @classmethod
-    def require_email(cls, value: object) -> str:
-        normalized = _normalize_email(value)
-        if not normalized:
-            raise ValueError('Employee email is required')
-        return normalized
+    def require_login_id(cls, value: object) -> str:
+        return validate_login_id(value)
+
+    @field_validator('password')
+    @classmethod
+    def require_password(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return stripped
 
     @field_validator('phone', mode='before')
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
         return _strip_text(value)
 
+    @model_validator(mode='after')
+    def confirm_matches(self) -> EmployeeCreate:
+        if self.confirm_password is not None and self.confirm_password != self.password:
+            raise ValueError('Passwords do not match')
+        return self
+
 
 class EmployeeUpdate(BaseModel):
     model_config = ConfigDict(extra='ignore')
 
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    login_id: str | None = None
     phone: str | None = Field(default=None, max_length=40)
     is_active: bool | None = None
 
@@ -174,6 +190,30 @@ class EmployeeUpdate(BaseModel):
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
         return _strip_text(value)
+
+    @field_validator('login_id', mode='before')
+    @classmethod
+    def strip_login_id(cls, value: object) -> str:
+        return validate_login_id(value)
+
+
+class EmployeePasswordResetRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: str | None = Field(default=None, max_length=128)
+
+    @field_validator('new_password')
+    @classmethod
+    def require_password(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return stripped
+
+    @model_validator(mode='after')
+    def confirm_matches(self) -> EmployeePasswordResetRequest:
+        if self.confirm_password is not None and self.confirm_password != self.new_password:
+            raise ValueError('Passwords do not match')
+        return self
 
 
 class UserCreateResponse(BaseModel):

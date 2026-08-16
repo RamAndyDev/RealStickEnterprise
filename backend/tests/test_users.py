@@ -26,7 +26,9 @@ def _employee(auth_header_factory):
 def _create_employee_payload(index: int, franchise_id=None):
     payload = {
         'full_name': f'Employee {index}',
-        'email': f'employee{index}@realstick.in',
+        'login_id': f'EMP{index:03d}',
+        'password': 'TestPass12',
+        'confirm_password': 'TestPass12',
         'phone': f'90000000{index:02d}',
     }
     if franchise_id is not None:
@@ -63,6 +65,9 @@ def test_owner_can_list_own_employees(client, auth_header_factory):
     assert str(ADMIN_ID) not in ids
     assert all(item['role'] == 'EMPLOYEE' for item in body['items'])
     assert all(item['franchise_id'] == str(FRANCHISE_A) for item in body['items'])
+    assert all(item.get('email') in (None, '') for item in body['items'])
+    employee = next(item for item in body['items'] if item['id'] == str(EMPLOYEE_ID))
+    assert employee['login_id'] == 'EMP001'
     assert body['employee_limit'] == 10
     assert body['active_count'] >= 1
 
@@ -128,7 +133,8 @@ def test_owner_cannot_create_system_admin(client, auth_header_factory, fake_db):
         headers=_owner(auth_header_factory),
         json={
             'full_name': 'Not An Admin',
-            'email': 'not.admin@realstick.in',
+            'login_id': 'EMPROGUE',
+            'password': 'TestPass12',
             'role': 'SYSTEM_ADMIN',
         },
     )
@@ -318,7 +324,9 @@ def test_owner_can_create_employee(client, auth_header_factory, fake_db):
         headers=_owner(auth_header_factory),
         json={
             'full_name': 'Priya Shah',
-            'email': 'priya@realstick.in',
+            'login_id': 'EMPPRIYA',
+            'password': 'TestPass12',
+            'confirm_password': 'TestPass12',
             'phone': '9888888888',
         },
     )
@@ -327,40 +335,38 @@ def test_owner_can_create_employee(client, auth_header_factory, fake_db):
     assert 'password' not in body
     assert 'password' not in body['user']
     assert body['user']['role'] == 'EMPLOYEE'
+    assert body['user']['login_id'] == 'EMPPRIYA'
+    assert body['user']['email'] is None
     assert body['user']['franchise_id'] == str(FRANCHISE_A)
     assert body['user']['is_active'] is True
-    assert body['password_setup'] in {'invite_email_sent', 'recovery_email_sent'}
+    assert body['password_setup'] == 'password_set'
     profile = next(p for p in fake_db.tables['profiles'] if p['id'] == body['user']['id'])
     assert profile['role'] == 'EMPLOYEE'
     assert profile['franchise_id'] == str(FRANCHISE_A)
-    assert any(item['email'] == 'priya@realstick.in' for item in fake_db.auth.admin.invites)
-    invite = next(item for item in fake_db.auth.admin.invites if item['email'] == 'priya@realstick.in')
-    assert str(invite['options'].get('redirect_to', '')).endswith('/reset-password')
-    assert any(str(u.email) == 'priya@realstick.in' for u in fake_db.auth.admin._users)
+    assert profile['login_id'] == 'EMPPRIYA'
+    assert 'password' not in profile
+    assert any(str(u.email) == 'emppriya@employees.invalid' for u in fake_db.auth.admin._users)
 
 
-def test_employee_invite_fallback_sends_recovery_email(client, auth_header_factory, fake_db):
-    fake_db.auth.admin.fail_next_invite = True
+def test_employee_is_created_without_email(client, auth_header_factory, fake_db):
     response = client.post(
         '/api/v1/owner/employees',
         headers=_owner(auth_header_factory),
-        json={'full_name': 'Fallback Hire', 'email': 'fallback.hire@realstick.in'},
+        json={'full_name': 'Fallback Hire', 'login_id': 'EMPFALL', 'password': 'TestPass12'},
     )
     assert response.status_code == 201
     body = response.json()
-    assert body['password_setup'] == 'recovery_email_sent'
-    assert body['user']['role'] == 'EMPLOYEE'
-    assert body['user']['franchise_id'] == str(FRANCHISE_A)
-    assert any(item['email'] == 'fallback.hire@realstick.in' for item in fake_db.auth.recovery_emails)
-    recovery = next(item for item in fake_db.auth.recovery_emails if item['email'] == 'fallback.hire@realstick.in')
-    assert str(recovery['options'].get('redirect_to', '')).endswith('/reset-password')
+    assert body['password_setup'] == 'password_set'
+    assert body['user']['email'] is None
+    assert body['user']['login_id'] == 'EMPFALL'
+    assert not fake_db.auth.recovery_emails
 
 
 def test_employee_profile_role_is_employee(client, auth_header_factory):
     response = client.post(
         '/api/v1/owner/employees',
         headers=_owner(auth_header_factory),
-        json={'full_name': 'Role Check', 'email': 'role.check@realstick.in'},
+        json={'full_name': 'Role Check', 'login_id': 'EMPROLE', 'password': 'TestPass12'},
     )
     assert response.status_code == 201
     assert response.json()['user']['role'] == 'EMPLOYEE'
@@ -370,7 +376,7 @@ def test_employee_franchise_matches_authenticated_owner(client, auth_header_fact
     response = client.post(
         '/api/v1/owner/employees',
         headers=_owner(auth_header_factory),
-        json={'full_name': 'Same Franchise', 'email': 'same.franchise@realstick.in'},
+        json={'full_name': 'Same Franchise', 'login_id': 'EMPSAME', 'password': 'TestPass12'},
     )
     assert response.status_code == 201
     assert response.json()['user']['franchise_id'] == str(FRANCHISE_A)
@@ -382,7 +388,8 @@ def test_owner_cannot_specify_a_different_franchise_id(client, auth_header_facto
         headers=_owner(auth_header_factory),
         json={
             'full_name': 'Wrong Franchise',
-            'email': 'wrong.franchise@realstick.in',
+            'login_id': 'EMPWRONG',
+            'password': 'TestPass12',
             'franchise_id': str(FRANCHISE_B),
         },
     )
@@ -434,14 +441,16 @@ def test_owner_can_reset_employee_password(client, auth_header_factory, fake_db)
     response = client.post(
         f'/api/v1/owner/employees/{EMPLOYEE_ID}/reset-password',
         headers=_owner(auth_header_factory),
+        json={'new_password': 'NewEmpPass12', 'confirm_password': 'NewEmpPass12'},
     )
     assert response.status_code == 200
     body = response.json()
-    assert body['password_setup'] == 'recovery_email_sent'
+    assert body['password_setup'] == 'password_set'
     assert 'password' not in body
-    assert any(
-        item['email'] == 'employee@realstick.in' for item in fake_db.auth.recovery_emails
-    )
+    assert 'NewEmpPass12' not in str(body)
+    employee_auth = next(u for u in fake_db.auth.admin._users if str(u.id) == str(EMPLOYEE_ID))
+    assert getattr(employee_auth, 'password', None) == 'NewEmpPass12'
+    assert not fake_db.auth.recovery_emails
 
 
 def test_employee_cannot_modify_another_employee(client, auth_header_factory):
@@ -461,31 +470,29 @@ def test_employee_cannot_modify_another_employee(client, auth_header_factory):
     assert admin_path.status_code == 403
 
 
-def test_employee_can_change_own_password(client, auth_header_factory, fake_db):
+def test_employee_cannot_change_own_password(client, auth_header_factory, fake_db):
     response = client.post(
         '/api/v1/auth/change-password',
         headers=_employee(auth_header_factory),
         json={'new_password': 'new-secret-99'},
     )
+    assert response.status_code == 403
+    employee_auth = next(u for u in fake_db.auth.admin._users if str(u.id) == str(EMPLOYEE_ID))
+    assert getattr(employee_auth, 'password', None) != 'new-secret-99'
+
+
+def test_owner_can_change_own_password(client, auth_header_factory, fake_db):
+    response = client.post(
+        '/api/v1/auth/change-password',
+        headers=_owner(auth_header_factory),
+        json={'new_password': 'new-secret-99'},
+    )
     assert response.status_code == 200
     body = response.json()
     assert body['message'] == 'Password updated'
-    assert 'password' not in body or body.get('password') is None
-    assert 'new_password' not in body
     assert 'new-secret-99' not in str(body)
-    employee_auth = next(u for u in fake_db.auth.admin._users if str(u.id) == str(EMPLOYEE_ID))
-    assert getattr(employee_auth, 'password', None) == 'new-secret-99'
-
-    other = client.post(
-        '/api/v1/auth/change-password',
-        headers=_employee(auth_header_factory),
-        json={'new_password': 'another-secret', 'user_id': str(OWNER_ID)},
-    )
-    assert other.status_code == 200
     owner_auth = next(u for u in fake_db.auth.admin._users if str(u.id) == str(OWNER_ID))
-    assert getattr(owner_auth, 'password', None) is None
-    employee_auth = next(u for u in fake_db.auth.admin._users if str(u.id) == str(EMPLOYEE_ID))
-    assert getattr(employee_auth, 'password', None) == 'another-secret'
+    assert getattr(owner_auth, 'password', None) == 'new-secret-99'
 
 
 def test_unauthenticated_change_password_is_rejected(client):
@@ -499,22 +506,22 @@ def test_unauthenticated_change_password_is_rejected(client):
 def test_change_password_rejects_short_password(client, auth_header_factory, fake_db):
     response = client.post(
         '/api/v1/auth/change-password',
-        headers=_employee(auth_header_factory),
+        headers=_owner(auth_header_factory),
         json={'new_password': 'short'},
     )
     assert response.status_code == 422
-    employee_auth = next(u for u in fake_db.auth.admin._users if str(u.id) == str(EMPLOYEE_ID))
-    assert getattr(employee_auth, 'password', None) != 'short'
+    owner_auth = next(u for u in fake_db.auth.admin._users if str(u.id) == str(OWNER_ID))
+    assert getattr(owner_auth, 'password', None) != 'short'
 
 
 def test_change_password_is_not_stored_on_profile(client, auth_header_factory, fake_db):
     response = client.post(
         '/api/v1/auth/change-password',
-        headers=_employee(auth_header_factory),
+        headers=_owner(auth_header_factory),
         json={'new_password': 'profile-safe-99'},
     )
     assert response.status_code == 200
-    profile = next(p for p in fake_db.tables['profiles'] if p['id'] == str(EMPLOYEE_ID))
+    profile = next(p for p in fake_db.tables['profiles'] if p['id'] == str(OWNER_ID))
     assert 'password' not in profile
     assert 'new_password' not in profile
     assert 'profile-safe-99' not in str(profile)
@@ -548,7 +555,8 @@ def test_first_active_employee_can_be_created(client, auth_header_factory, fake_
         headers=auth_header_factory(owner_id, 'franchise.b.owner@realstick.in'),
         json={
             'full_name': 'First Hire',
-            'email': 'first.hire@realstick.in',
+            'login_id': 'EMPFIRST',
+            'password': 'TestPass12',
         },
     )
     assert response.status_code == 201
@@ -656,7 +664,8 @@ def test_concurrent_employee_creation_cannot_bypass_limit(client, auth_header_fa
             headers=headers,
             json={
                 'full_name': f'Race {suffix}',
-                'email': f'race{suffix}-{uuid4().hex[:8]}@realstick.in',
+                'login_id': f'EMPRACE{suffix}{uuid4().hex[:6]}',
+                'password': 'TestPass12',
             },
         )
 

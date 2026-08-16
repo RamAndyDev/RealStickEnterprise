@@ -18,7 +18,8 @@ import {
   updateEmployee,
 } from '../../lib/usersApi';
 import type { ManagedUser } from '../../types/user';
-import { apiErrorMessage, formatDate } from '../franchises/status';
+import { apiErrorMessage } from '../franchises/status';
+import { employeeUserIdLabel } from './labels';
 import { UserDetail } from './UserDetail';
 import { UserForm, emptyUserForm, userToForm, type UserFormValues } from './UserForm';
 
@@ -30,6 +31,8 @@ export function EmployeesPage() {
   const [editTarget, setEditTarget] = useState<ManagedUser | null>(null);
   const [statusTarget, setStatusTarget] = useState<ManagedUser | null>(null);
   const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +45,9 @@ export function EmployeesPage() {
     mutationFn: (values: UserFormValues) =>
       createEmployee({
         full_name: values.full_name.trim(),
-        email: values.email.trim(),
+        login_id: values.login_id.trim(),
+        password: values.password,
+        confirm_password: values.confirm_password,
         phone: values.phone.trim() || null,
       }),
     onSuccess: async (data) => {
@@ -58,6 +63,7 @@ export function EmployeesPage() {
     mutationFn: ({ id, values }: { id: string; values: UserFormValues }) =>
       updateEmployee(id, {
         full_name: values.full_name.trim(),
+        login_id: values.login_id.trim(),
         phone: values.phone.trim() || null,
       }),
     onSuccess: async () => {
@@ -82,9 +88,15 @@ export function EmployeesPage() {
   });
 
   const resetMutation = useMutation({
-    mutationFn: (id: string) => resetEmployeePassword(id),
+    mutationFn: (id: string) =>
+      resetEmployeePassword(id, {
+        new_password: resetPassword,
+        confirm_password: resetConfirm,
+      }),
     onSuccess: async (data) => {
       setResetTarget(null);
+      setResetPassword('');
+      setResetConfirm('');
       setFeedback(data.message);
       setError(null);
     },
@@ -149,26 +161,24 @@ export function EmployeesPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
               <tr>
+                <th className="px-4 py-3 font-semibold">User ID</th>
                 <th className="px-4 py-3 font-semibold">Name</th>
-                <th className="px-4 py-3 font-semibold">Email</th>
-                <th className="px-4 py-3 font-semibold">Phone</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Created</th>
                 <th className="px-4 py-3 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id} className="border-b border-[#E0DDD5] last:border-b-0">
+                  <td className="px-4 py-3 font-mono text-xs font-semibold">
+                    {employeeUserIdLabel(item.login_id)}
+                  </td>
                   <td className="px-4 py-3 font-semibold">{item.full_name}</td>
-                  <td className="px-4 py-3">{item.email ?? '—'}</td>
-                  <td className="px-4 py-3">{item.phone ?? '—'}</td>
                   <td className="px-4 py-3">
                     <Badge tone={item.is_active ? 'green' : 'muted'}>
                       {item.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">{formatDate(item.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={() => setViewTarget(item)}>
@@ -202,6 +212,7 @@ export function EmployeesPage() {
           ) : (
             <UserForm
               mode="create"
+              employeeMode
               initial={emptyUserForm('EMPLOYEE')}
               franchiseLabel={franchiseLabel}
               submitting={createMutation.isPending}
@@ -220,8 +231,9 @@ export function EmployeesPage() {
 
       {editTarget ? (
         <Modal title="Edit employee" onClose={() => setEditTarget(null)}>
-          <UserForm
+            <UserForm
             mode="edit"
+            employeeMode
             initial={userToForm(editTarget)}
             franchiseLabel={franchiseLabel}
             submitting={updateMutation.isPending}
@@ -266,20 +278,60 @@ export function EmployeesPage() {
       ) : null}
 
       {resetTarget ? (
-        <Modal title="Reset password" onClose={() => setResetTarget(null)}>
+        <Modal
+          title="Reset password"
+          onClose={() => {
+            setResetTarget(null);
+            setResetPassword('');
+            setResetConfirm('');
+          }}
+        >
           <p className="mb-4 text-sm text-[#4A4A46]">
-            Send a password recovery email to <strong>{resetTarget.email ?? resetTarget.full_name}</strong>?
-            A password will not be displayed.
+            Set a new password for{' '}
+            <strong>
+              {resetTarget.login_id?.trim() ? resetTarget.login_id : resetTarget.full_name}
+            </strong>
+            .
+            Share it with the employee offline. It is not emailed.
           </p>
+          <label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-[#8A8A84]">
+            New password
+            <input
+              type="password"
+              className="mt-2 w-full rounded-lg border border-[#E0DDD5] px-3 py-2.5 text-sm"
+              value={resetPassword}
+              onChange={(event) => setResetPassword(event.target.value)}
+            />
+          </label>
+          <label className="mb-4 block text-xs font-semibold uppercase tracking-wide text-[#8A8A84]">
+            Confirm password
+            <input
+              type="password"
+              className="mt-2 w-full rounded-lg border border-[#E0DDD5] px-3 py-2.5 text-sm"
+              value={resetConfirm}
+              onChange={(event) => setResetConfirm(event.target.value)}
+            />
+          </label>
           <div className="flex justify-end gap-2">
-            <Button variant="muted" onClick={() => setResetTarget(null)}>
+            <Button
+              variant="muted"
+              onClick={() => {
+                setResetTarget(null);
+                setResetPassword('');
+                setResetConfirm('');
+              }}
+            >
               Cancel
             </Button>
             <Button
-              disabled={resetMutation.isPending}
+              disabled={
+                resetMutation.isPending ||
+                resetPassword.length < 8 ||
+                resetPassword !== resetConfirm
+              }
               onClick={() => resetMutation.mutate(resetTarget.id)}
             >
-              {resetMutation.isPending ? 'Sending…' : 'Send reset'}
+              {resetMutation.isPending ? 'Saving…' : 'Reset password'}
             </Button>
           </div>
         </Modal>

@@ -5,11 +5,14 @@ from fastapi import HTTPException, Request, status
 from app.modules.public.email import CONTACT_FAILURE_MESSAGE, EmailDeliveryError, send_contact_email
 from app.modules.public.rate_limit import contact_rate_limited
 from app.modules.public.repository import PublicCatalogRepository
+from app.core.config import get_settings
 from app.modules.public.schemas import (
+    ENQUIRY_TYPE_LABELS,
     ContactEnquiryRequest,
     ContactEnquiryResponse,
     PublicCategory,
     PublicCategoryListResponse,
+    PublicContactOptions,
     PublicProduct,
     PublicProductListResponse,
 )
@@ -74,6 +77,7 @@ class PublicService:
                 phone=body.phone,
                 email=str(body.email),
                 message=body.message,
+                enquiry_type=ENQUIRY_TYPE_LABELS.get(body.enquiry_type, body.enquiry_type.value),
             )
         except EmailDeliveryError as exc:
             raise HTTPException(
@@ -81,3 +85,24 @@ class PublicService:
                 detail=str(exc) or CONTACT_FAILURE_MESSAGE,
             ) from exc
         return ContactEnquiryResponse(message=THANK_YOU_MESSAGE)
+
+    def contact_options(self) -> PublicContactOptions:
+        settings = get_settings()
+        phone = _digits_or_none(settings.public_contact_phone)
+        whatsapp = _digits_or_none(settings.public_contact_whatsapp)
+        email = (settings.public_contact_email or '').strip() or None
+        return PublicContactOptions(
+            phone=phone,
+            whatsapp=whatsapp,
+            email=email,
+            whatsapp_url=f'https://wa.me/{whatsapp}' if whatsapp else None,
+            tel_url=f'tel:{phone}' if phone else None,
+            mailto_url=f'mailto:{email}' if email else None,
+        )
+
+
+def _digits_or_none(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = ''.join(ch for ch in value if ch.isdigit())
+    return digits or None

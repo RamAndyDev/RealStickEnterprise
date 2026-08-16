@@ -27,7 +27,13 @@ export function AppShell() {
   }, [drawerOpen]);
 
   const navLinks = (
-    <nav className="space-y-1 p-3">
+    <nav
+      className={
+        isPos
+          ? 'scrollbar-hidden min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3'
+          : 'scrollbar-hidden space-y-1 p-3 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain'
+      }
+    >
       {items.map((item) => (
         <NavLink
           key={`${item.path}-${item.label}`}
@@ -50,10 +56,12 @@ export function AppShell() {
   );
 
   const userBlock = (
-    <div className={`border-t border-white/10 p-4 ${isPos ? '' : 'md:fixed md:bottom-0 md:w-60'}`}>
+    <div className="shrink-0 border-t border-white/10 p-4">
       <div className="text-sm">{profile?.full_name}</div>
       <div className="mb-1 text-xs text-white/45">{profile?.role}</div>
-      {profile?.email ? (
+      {profile?.role === 'EMPLOYEE' && profile.login_id ? (
+        <div className="mb-3 truncate text-xs text-white/35">{profile.login_id}</div>
+      ) : profile?.email ? (
         <div className="mb-3 truncate text-xs text-white/35">{profile.email}</div>
       ) : (
         <div className="mb-3" />
@@ -73,8 +81,8 @@ export function AppShell() {
     <div
       className={
         isPos
-          ? 'flex h-screen flex-col overflow-hidden bg-[#FDFAF4] lg:flex-row'
-          : 'min-h-screen bg-[#FDFAF4] md:flex'
+          ? 'flex h-dvh flex-col overflow-hidden bg-[#FDFAF4] lg:flex-row'
+          : 'min-h-dvh bg-[#FDFAF4] md:flex md:h-dvh md:overflow-hidden'
       }
     >
       {isPos ? (
@@ -106,13 +114,13 @@ export function AppShell() {
         id={isPos ? drawerId : undefined}
         className={
           isPos
-            ? `fixed inset-y-0 left-0 z-40 flex w-60 flex-col bg-[#0D4F2E] text-white transition-transform lg:static lg:h-screen lg:translate-x-0 lg:overflow-y-auto ${
+            ? `fixed inset-y-0 left-0 z-40 flex h-dvh max-h-dvh w-60 flex-col bg-[#0D4F2E] text-white transition-transform lg:static lg:h-full lg:max-h-none lg:translate-x-0 ${
                 drawerOpen ? 'translate-x-0' : '-translate-x-full'
               }`
-            : `w-full bg-[#0D4F2E] text-white md:w-60 md:min-h-screen`
+            : `flex w-full flex-col bg-[#0D4F2E] text-white md:h-full md:w-60 md:shrink-0`
         }
       >
-        <div className="border-b border-white/10 px-5 py-5">
+        <div className="shrink-0 border-b border-white/10 px-5 py-5">
           <div className="font-serif text-2xl font-bold">RealStick™</div>
           <div className="mt-1 text-[10px] uppercase tracking-[.18em] text-white/45">
             Enterprise
@@ -126,7 +134,7 @@ export function AppShell() {
         className={
           isPos
             ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
-            : 'min-w-0 flex-1 p-5 md:p-8'
+            : 'min-w-0 flex-1 p-5 md:min-h-0 md:overflow-y-auto md:p-8'
         }
       >
         <Outlet />

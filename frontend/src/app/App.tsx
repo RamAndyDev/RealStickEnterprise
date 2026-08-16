@@ -27,12 +27,16 @@ import { ThermalReceiptPage } from '../features/pos/ThermalReceiptPage';
 import { BillsPage } from '../features/bills/BillsPage';
 import { BillDetailPage } from '../features/bills/BillDetailPage';
 import { GstSettingsPage } from '../features/settings/GstSettingsPage';
-import { OffersPage } from '../features/settings/OffersPage';
+import { InactivityGuard } from '../features/auth/InactivityGuard';
+import { OffersPage } from '../features/settings/OwnerOffersPage';
+import { PromotionsPage } from '../features/settings/PromotionsPage';
 import { DailySalesPage } from '../features/reports/DailySalesPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
 
 export default function App() {
   return (
+    <>
+    <InactivityGuard />
     <Routes>
       <Route element={<PublicLayout />}>
         <Route index element={<PublicHomePage />} />
@@ -68,7 +72,8 @@ export default function App() {
             <Route path="products/:productId" element={<ProductDetailPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="settings/gst" element={<GstSettingsPage />} />
-            <Route path="settings/offers" element={<OffersPage />} />
+            <Route path="settings/offers" element={<Navigate to="/admin/promotions" replace />} />
+            <Route path="admin/promotions" element={<PromotionsPage />} />
             <Route path="admin/gallery" element={<AdminGalleryPage />} />
             <Route
               path="audit"
@@ -79,6 +84,7 @@ export default function App() {
           <Route element={<ProtectedRoute roles={['FRANCHISE_OWNER']} />}>
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="owner/menu" element={<OwnerMenuPage />} />
+            <Route path="owner/offers" element={<OffersPage />} />
           </Route>
 
           <Route element={<ProtectedRoute roles={['EMPLOYEE']} />}>
@@ -95,12 +101,15 @@ export default function App() {
             <Route path="profile" element={<ProfilePage />} />
           </Route>
 
-          <Route path="change-password" element={<ChangePasswordPage />} />
+          <Route element={<ProtectedRoute roles={['SYSTEM_ADMIN', 'FRANCHISE_OWNER']} />}>
+            <Route path="change-password" element={<ChangePasswordPage />} />
+          </Route>
         </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 

@@ -11,6 +11,7 @@ class MeResponse(BaseModel):
 
     id: UUID
     email: str | None = None
+    login_id: str | None = None
     full_name: str
     role: UserRole
     franchise_id: UUID | None = None
@@ -18,6 +19,26 @@ class MeResponse(BaseModel):
     phone: str | None = None
     is_active: bool
     created_at: datetime | None = None
+
+
+class LoginRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator('identifier', 'password')
+    @classmethod
+    def strip_required(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError('This field is required')
+        return stripped
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = 'bearer'
+    expires_in: int | None = None
 
 
 class ChangePasswordRequest(BaseModel):

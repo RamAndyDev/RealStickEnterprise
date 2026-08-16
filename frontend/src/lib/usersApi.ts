@@ -71,8 +71,14 @@ export async function updateEmployee(id: string, payload: EmployeeUpdatePayload)
   return data;
 }
 
-export async function resetEmployeePassword(id: string): Promise<PasswordResetResponse> {
-  const { data } = await api.post<PasswordResetResponse>(`/owner/employees/${id}/reset-password`);
+export async function resetEmployeePassword(
+  id: string,
+  payload: { new_password: string; confirm_password: string },
+): Promise<PasswordResetResponse> {
+  const { data } = await api.post<PasswordResetResponse>(
+    `/owner/employees/${id}/reset-password`,
+    payload,
+  );
   return data;
 }
 

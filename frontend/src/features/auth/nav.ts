@@ -34,8 +34,8 @@ export const APP_NAV: NavItem[] = [
     roles: ['SYSTEM_ADMIN'],
   },
   {
-    label: 'Offers',
-    path: '/settings/offers',
+    label: 'Promotions',
+    path: '/admin/promotions',
     roles: ['SYSTEM_ADMIN'],
   },
   {
@@ -46,6 +46,11 @@ export const APP_NAV: NavItem[] = [
   {
     label: 'Menu / Pricing',
     path: '/owner/menu',
+    roles: ['FRANCHISE_OWNER'],
+  },
+  {
+    label: 'Offers & Discounts',
+    path: '/owner/offers',
     roles: ['FRANCHISE_OWNER'],
   },
   {
@@ -74,6 +79,11 @@ export const APP_NAV: NavItem[] = [
     roles: ['FRANCHISE_OWNER'],
   },
   {
+    label: 'Change Password',
+    path: '/change-password',
+    roles: ['SYSTEM_ADMIN', 'FRANCHISE_OWNER'],
+  },
+  {
     label: 'POS',
     path: '/pos',
     roles: ['EMPLOYEE'],
@@ -91,11 +101,6 @@ export const APP_NAV: NavItem[] = [
   {
     label: 'My Profile',
     path: '/profile',
-    roles: ['EMPLOYEE'],
-  },
-  {
-    label: 'Change Password',
-    path: '/change-password',
     roles: ['EMPLOYEE'],
   },
 ];

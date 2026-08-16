@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
 
 from app.core.roles import UserRole
@@ -8,10 +8,13 @@ from app.core.security import (
     require_franchise_access,
     require_role,
 )
+from app.modules.auth.login import AuthLoginService
 from app.modules.auth.schemas import (
     AuthTestResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
+    LoginRequest,
+    LoginResponse,
     MeResponse,
 )
 from app.modules.users.service import UsersService
@@ -21,6 +24,25 @@ router = APIRouter(prefix='/auth', tags=['auth'])
 
 def get_users_service() -> UsersService:
     return UsersService()
+
+
+def get_login_service() -> AuthLoginService:
+    return AuthLoginService()
+
+
+@router.post('/login', response_model=LoginResponse)
+def login(
+    body: LoginRequest,
+    service: AuthLoginService = Depends(get_login_service),
+) -> LoginResponse:
+    """Sign in with email (admin/owner) or User ID (employee). Never returns passwords."""
+    payload = service.login(body.identifier, body.password)
+    return LoginResponse(
+        access_token=payload['access_token'],
+        refresh_token=payload['refresh_token'],
+        token_type=payload.get('token_type') or 'bearer',
+        expires_in=payload.get('expires_in'),
+    )
 
 
 @router.get('/me', response_model=MeResponse)
@@ -48,6 +70,7 @@ def read_me(profile: CurrentProfile = Depends(get_current_profile)) -> MeRespons
     return MeResponse(
         id=profile.id,
         email=profile.email,
+        login_id=profile.login_id,
         full_name=profile.full_name,
         role=profile.role,
         franchise_id=profile.franchise_id,
@@ -64,7 +87,12 @@ def change_password(
     profile: CurrentProfile = Depends(get_current_profile),
     service: UsersService = Depends(get_users_service),
 ) -> ChangePasswordResponse:
-    """Change the authenticated user's own password. Never accepts a target user id."""
+    """Admin and Owner change their own password. Employees cannot."""
+    if profile.role == UserRole.EMPLOYEE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Employees cannot change their password. Ask the franchise owner to reset it.',
+        )
     service.change_own_password(profile, body.new_password)
     return ChangePasswordResponse(message='Password updated')
 

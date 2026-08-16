@@ -7,12 +7,21 @@ Base: `/api/v1`
 - GET `/health/database` — verifies Supabase connectivity (503 when unavailable)
 
 ## Auth (Bearer access token from Supabase Auth)
+- POST `/auth/login` — staff sign-in. Body: `{ "identifier", "password" }`
+  - `SYSTEM_ADMIN` / `FRANCHISE_OWNER`: `identifier` is the business email
+  - `EMPLOYEE`: `identifier` is the User ID (for example `EMP001`). Employees have no business email
+  - The backend resolves User ID to the employee's Supabase Auth identity and performs a password grant. The frontend never queries `profiles` to verify passwords
+  - Employee login with an email (including the internal `*@employees.invalid` identity) is rejected
+  - Success returns `{ access_token, refresh_token, token_type, expires_in }`. Passwords are never returned
 - GET `/auth/me` — authenticated profile (role/franchise from `public.profiles`)
-- POST `/auth/change-password` — authenticated user changes their own password
+  - Includes `login_id` for employees
+  - Employee `email` is always `null`. Admin/Owner email is the Supabase Auth email
+- POST `/auth/change-password` — `SYSTEM_ADMIN` and `FRANCHISE_OWNER` only
   - Body: `{ "new_password": "..." }` (min 8 characters)
   - Uses the authenticated profile id only; a client-supplied `user_id` is ignored
-  - Password is stored in Supabase Auth. It is never written to `public.profiles` and never returned in the API response
-  - Employee UI exposes this at `/change-password`. Admin/Owner password-reset endpoints are unchanged
+  - Password is stored in Supabase Auth. It is never written to `public.profiles` and never returned
+  - `EMPLOYEE` receives 403. Franchise Owner resets employee passwords instead
+- Inactivity logout is a frontend session UX (10 minutes of no mouse/keyboard/touch/navigation). Backend JWT validation is unchanged
 
 ## Temporary auth verification endpoints (remove later)
 - GET `/auth/test/admin` — `SYSTEM_ADMIN` only
@@ -138,13 +147,43 @@ Responses are explicit whitelists. They never include prices, SKU, metadata, fra
 - GET `/public/gallery` — approved, non-archived gallery items sorted by `display_order`, then `created_at`
   - Whitelist: `id`, `title`, `caption`, `author_name`, `media_type`, `media_url`, `display_order`
   - Never returns `uploaded_by`, `storage_path`, `franchise_id`, or approval/archive flags
+- GET `/public/contact-options` — configured public contact actions (`phone`, `whatsapp`, `email`, and matching `tel:` / `wa.me` / `mailto` URLs). Missing values are `null`; the API never invents numbers
 - POST `/public/contact` — send a website enquiry to the RealStick team via Resend
-  - Body: `{ "name", "phone", "email", "message", "website?" }`
+  - Body: `{ "name", "phone", "email", "message", "enquiry_type?", "website?" }`
+  - `enquiry_type`: `GENERAL` | `FRANCHISE` | `COMPLAINT` | `FEEDBACK` | `OTHER` (default `GENERAL`)
   - `website` is a honeypot; a non-empty value is rejected
   - Success: `{ "message": "Thank you. The RealStick team will contact you." }`
-  - Delivery failure: 502 and no success payload
+  - Delivery failure (missing config, invalid key, or Resend error): 502 `{ "detail": "Unable to send your enquiry right now. Please try again." }` — never a success payload
   - Does **not** create `franchise_applications` rows
   - Rate limit: 5 requests / hour / IP
+  - There is no public promotions, coupons, or offer endpoint
+
+## Promotions (SYSTEM_ADMIN) and Offers (FRANCHISE_OWNER)
+
+Customers never enter promo codes. Promotions are internal business controls.
+
+- GET/POST `/admin/promotions` — list/create Admin promotions (`name`, `description`, `promo_code`, validity, `is_active`, `franchise_ids`)
+- PATCH `/admin/promotions/{id}` — edit, activate/deactivate, change participating franchises
+- GET `/owner/promotions` — promotions that include the owner's franchise (read-only)
+- GET/POST `/owner/offers` — franchise-local offers. `promotion_id` is optional (`null` = independent local offer)
+- PATCH `/owner/offers/{id}` — owner may edit/activate only their own franchise offers
+- GET `/pos/offers` — applicable offers for the authenticated employee's franchise
+  - Offer is shown when it is active, in validity, belongs to the franchise, and either has no promotion or the linked promotion is active, in validity, and includes the franchise
+  - Employee selects an offer; they never enter a promo code
+  - One offer per order remains enforced at checkout
+  - Existing M6/M8 GST path is unchanged: subtotal → offer discount → taxable → CGST/SGST → total
+  - Completed-order offer snapshots are not rewritten when a promotion later changes
+
+`GET/POST/PATCH /admin/offers` remains for existing GST/POS test and service compatibility. Admin UI uses Promotions; Owner UI uses Offers & Discounts.
+
+## Employees (FRANCHISE_OWNER)
+
+- GET/POST `/owner/employees` — list/create employees for the authenticated franchise
+  - Create body: `{ "login_id", "full_name", "password", "confirm_password?", "phone?" }`
+  - No email field. An internal Auth identity (`{login_id}@employees.invalid`) is an implementation detail and is never shown
+- PATCH `/owner/employees/{id}` — name, User ID, phone, active status
+- POST `/owner/employees/{id}/reset-password` — `{ "new_password", "confirm_password" }` updates Supabase Auth. No recovery email is sent
+- Admin User Management (`/admin/users`) continues to list only `SYSTEM_ADMIN` and `FRANCHISE_OWNER`. Email is hydrated from Supabase Auth and is read-only. Employees are excluded
 
 ## Admin gallery (SYSTEM_ADMIN only)
 
@@ -162,8 +201,11 @@ Brand-level items use `franchise_id = NULL`. Prefer archive (`is_archived`) over
 - `RESEND_API_KEY`
 - `CONTACT_TO_EMAIL`
 - `CONTACT_FROM_EMAIL`
+- `PUBLIC_CONTACT_PHONE` (optional)
+- `PUBLIC_CONTACT_WHATSAPP` (optional; digits used for `https://wa.me/{digits}`)
+- `PUBLIC_CONTACT_EMAIL` (optional)
 
-Never expose these to the React app.
+Never expose these, the Supabase service-role key, or passwords to the React app.
 
 Planned resources (not in this milestone):
 - `/inventory`

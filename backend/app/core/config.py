@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     resend_api_key: str | None = None
     contact_to_email: str | None = None
     contact_from_email: str | None = None
+    # Public "Contact RealStick" actions. Optional — never invent missing values.
+    public_contact_phone: str | None = None
+    public_contact_whatsapp: str | None = None
+    public_contact_email: str | None = None
 
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 

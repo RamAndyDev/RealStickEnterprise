@@ -13,6 +13,11 @@ export function roleLabel(role: UserRole): string {
   }
 }
 
+export function employeeUserIdLabel(loginId: string | null | undefined): string {
+  const value = loginId?.trim();
+  return value ? value : 'Not Assigned';
+}
+
 export function roleTone(role: UserRole): 'navy' | 'orange' | 'green' {
   switch (role) {
     case 'SYSTEM_ADMIN':

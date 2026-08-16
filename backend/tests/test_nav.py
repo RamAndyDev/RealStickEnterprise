@@ -91,7 +91,7 @@ def test_owner_sees_employees_and_menu_pricing():
     assert 'Employees' in labels
     assert 'Menu / Pricing' in labels
     assert 'Bills' in labels
-    assert 'Change Password' not in labels
+    assert 'Change Password' in labels
 
 
 def test_all_roles_see_bills_navigation():
@@ -120,7 +120,7 @@ def test_receipt_reprint_route_is_available_to_all_roles():
 def test_employee_sees_pos_daily_sales_profile_and_password():
     paths = _paths_for_role('EMPLOYEE')
     labels = {label for label, path, roles in _nav_items() if 'EMPLOYEE' in roles}
-    assert paths == ['/pos', '/daily-sales', '/bills', '/profile', '/change-password']
+    assert paths == ['/pos', '/daily-sales', '/bills', '/profile']
     assert '/' not in paths
     assert '/reports' not in paths
     assert '/menu' not in paths
@@ -128,7 +128,7 @@ def test_employee_sees_pos_daily_sales_profile_and_password():
     assert 'Daily Sales' in labels
     assert 'Bills' in labels
     assert 'My Profile' in labels
-    assert 'Change Password' in labels
+    assert 'Change Password' not in labels
     assert 'Dashboard' not in labels
     assert 'Reports' not in labels
     assert 'Menu / Pricing' not in labels
@@ -143,14 +143,18 @@ def test_admin_sees_bills_gst_and_offers():
     assert '/bills' in paths
     assert '/pos' not in paths
     assert '/settings/gst' in paths
-    assert '/settings/offers' in paths
+    assert '/admin/promotions' in paths
+    assert '/settings/offers' not in paths
 
 
 def test_owner_and_employee_do_not_see_gst_or_offers_settings():
     assert '/settings/gst' not in _paths_for_role('FRANCHISE_OWNER')
     assert '/settings/offers' not in _paths_for_role('FRANCHISE_OWNER')
+    assert '/admin/promotions' not in _paths_for_role('FRANCHISE_OWNER')
+    assert '/owner/offers' in _paths_for_role('FRANCHISE_OWNER')
     assert '/settings/gst' not in _paths_for_role('EMPLOYEE')
     assert '/settings/offers' not in _paths_for_role('EMPLOYEE')
+    assert '/owner/offers' not in _paths_for_role('EMPLOYEE')
 
 
 def test_admin_sees_dashboard_reports_and_existing_modules():
@@ -244,13 +248,14 @@ def test_home_renders_role_dashboards_not_placeholder():
     assert 'Navigate to="/pos"' in home
 
 
-def test_admin_and_owner_do_not_see_change_password_navigation():
-    assert '/change-password' not in _paths_for_role('SYSTEM_ADMIN')
-    assert '/change-password' not in _paths_for_role('FRANCHISE_OWNER')
+def test_admin_and_owner_see_change_password_navigation():
+    assert '/change-password' in _paths_for_role('SYSTEM_ADMIN')
+    assert '/change-password' in _paths_for_role('FRANCHISE_OWNER')
+    assert '/change-password' not in _paths_for_role('EMPLOYEE')
     admin_labels = {label for label, path, roles in _nav_items() if 'SYSTEM_ADMIN' in roles}
     owner_labels = {label for label, path, roles in _nav_items() if 'FRANCHISE_OWNER' in roles}
-    assert 'Change Password' not in admin_labels
-    assert 'Change Password' not in owner_labels
+    assert 'Change Password' in admin_labels
+    assert 'Change Password' in owner_labels
 
 
 def test_daily_sales_page_has_single_date_selector():
@@ -300,6 +305,8 @@ def test_staff_landing_paths():
     assert 'Navigate to="/" replace' not in login
     assert 'Sign in to your account' not in login
     assert 'Staff Login' in login
+    assert 'Enter email or user ID' in login
+    assert 'Email/User ID' in login
 
 
 def test_unauthenticated_staff_routes_still_use_protected_route():
@@ -333,6 +340,30 @@ def test_owner_and_employee_do_not_manage_gallery():
     assert '/admin/gallery' not in _paths_for_role('FRANCHISE_OWNER')
     assert '/admin/gallery' not in _paths_for_role('EMPLOYEE')
     assert '/admin/gallery' in _paths_for_role('SYSTEM_ADMIN')
+
+
+def test_public_home_uses_official_brand_image():
+    hero = (ROOT / 'frontend' / 'src' / 'features' / 'public' / 'HeroArt.tsx').read_text(
+        encoding='utf-8'
+    )
+    home = (ROOT / 'frontend' / 'src' / 'features' / 'public' / 'HomePage.tsx').read_text(
+        encoding='utf-8'
+    )
+    brand = ROOT / 'frontend' / 'public' / 'brand' / 'realstick-brand.svg'
+    assert '/brand/realstick-brand.svg' in hero
+    assert 'BrandHero' in home
+    assert brand.exists()
+    assert 'RealStick' in brand.read_text(encoding='utf-8')
+
+
+def test_view_gallery_button_has_readable_contrast():
+    home = (ROOT / 'frontend' / 'src' / 'features' / 'public' / 'HomePage.tsx').read_text(
+        encoding='utf-8'
+    )
+    ui = (ROOT / 'frontend' / 'src' / 'components' / 'ui' / 'index.tsx').read_text(encoding='utf-8')
+    assert 'variant="onDark"' in home
+    assert 'View Gallery' in home
+    assert 'bg-white text-[#0D4F2E]' in ui
 
 
 def test_pos_page_still_uses_frozen_checkout():

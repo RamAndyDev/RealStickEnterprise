@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'outline' | 'danger' | 'muted';
+  variant?: 'primary' | 'outline' | 'danger' | 'muted' | 'onDark';
   size?: 'sm' | 'md';
 };
 
@@ -21,6 +21,8 @@ export function Button({
     outline: 'border-2 border-[#1A7A4A] bg-transparent text-[#1A7A4A] hover:bg-[#E6F4EC]',
     danger: 'bg-[#C00000] text-white hover:bg-[#a00000]',
     muted: 'border-2 border-[#8A8A84] bg-transparent text-[#8A8A84] hover:bg-[#f3f2ef]',
+    onDark:
+      'bg-white text-[#0D4F2E] hover:bg-[#E6F4EC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
   }[variant];
 
   return (

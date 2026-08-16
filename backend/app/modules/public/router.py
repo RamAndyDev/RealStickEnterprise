@@ -6,6 +6,7 @@ from app.modules.public.schemas import (
     ContactEnquiryRequest,
     ContactEnquiryResponse,
     PublicCategoryListResponse,
+    PublicContactOptions,
     PublicProductListResponse,
 )
 from app.modules.public.service import PublicService
@@ -29,6 +30,13 @@ def list_public_products(
     service: PublicService = Depends(get_public_service),
 ) -> PublicProductListResponse:
     return service.list_products()
+
+
+@router.get('/contact-options', response_model=PublicContactOptions)
+def public_contact_options(
+    service: PublicService = Depends(get_public_service),
+) -> PublicContactOptions:
+    return service.contact_options()
 
 
 @router.post('/contact', response_model=ContactEnquiryResponse)

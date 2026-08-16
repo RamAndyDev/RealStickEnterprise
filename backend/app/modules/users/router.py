@@ -12,6 +12,7 @@ from app.modules.users.schemas import (
     AdminUserUpdate,
     EmployeeCreate,
     EmployeeListResponse,
+    EmployeePasswordResetRequest,
     EmployeeUpdate,
     ManagedUser,
     PasswordResetResponse,
@@ -124,7 +125,8 @@ def update_employee(
 @owner_router.post('/employees/{employee_id}/reset-password', response_model=PasswordResetResponse)
 def reset_employee_password(
     employee_id: UUID,
+    body: EmployeePasswordResetRequest,
     profile: FranchiseOwner,
     service: UsersService = Depends(get_users_service),
 ) -> PasswordResetResponse:
-    return service.reset_employee_password(profile, employee_id)
+    return service.reset_employee_password(profile, employee_id, body)

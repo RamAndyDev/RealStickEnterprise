@@ -47,6 +47,9 @@ _POS_ERROR_HTTP: dict[str, tuple[int, str]] = {
     'OFFER_EXPIRED': (status.HTTP_422_UNPROCESSABLE_ENTITY, 'Offer is not currently valid'),
     'OFFER_NOT_YET_VALID': (status.HTTP_422_UNPROCESSABLE_ENTITY, 'Offer is not currently valid'),
     'OFFER_NOT_APPLICABLE': (status.HTTP_403_FORBIDDEN, 'Offer is not applicable to this franchise'),
+    'PROMOTION_INACTIVE': (status.HTTP_422_UNPROCESSABLE_ENTITY, 'Offer is not currently valid'),
+    'PROMOTION_EXPIRED': (status.HTTP_422_UNPROCESSABLE_ENTITY, 'Offer is not currently valid'),
+    'PROMOTION_NOT_APPLICABLE': (status.HTTP_403_FORBIDDEN, 'Offer is not applicable to this franchise'),
 }
 
 
@@ -87,7 +90,24 @@ def _parse_dt(value: object) -> datetime | None:
     return dt
 
 
-def offer_is_applicable(row: dict, *, franchise_id: UUID, now: datetime) -> bool:
+def _window_active(valid_from: object, valid_to: object, now: datetime) -> bool:
+    start = _parse_dt(valid_from)
+    end = _parse_dt(valid_to)
+    if start and start > now:
+        return False
+    if end and end < now:
+        return False
+    return True
+
+
+def offer_is_applicable(
+    row: dict,
+    *,
+    franchise_id: UUID,
+    now: datetime,
+    promotion: dict | None = None,
+    promotion_franchise_ids: set[str] | None = None,
+) -> bool:
     if not row.get('is_active'):
         return False
     if str(row.get('discount_type') or 'PERCENTAGE') != 'PERCENTAGE':
@@ -95,13 +115,17 @@ def offer_is_applicable(row: dict, *, franchise_id: UUID, now: datetime) -> bool
     offer_franchise = row.get('franchise_id')
     if offer_franchise not in (None, '') and str(offer_franchise) != str(franchise_id):
         return False
-    valid_from = _parse_dt(row.get('valid_from'))
-    valid_to = _parse_dt(row.get('valid_to'))
-    if valid_from and valid_from > now:
+    if not _window_active(row.get('valid_from'), row.get('valid_to'), now):
         return False
-    if valid_to and valid_to < now:
+    promotion_id = row.get('promotion_id')
+    if promotion_id in (None, ''):
+        return True
+    if not promotion or not promotion.get('is_active'):
         return False
-    return True
+    if not _window_active(promotion.get('valid_from'), promotion.get('valid_to'), now):
+        return False
+    allowed = promotion_franchise_ids or set()
+    return str(franchise_id) in allowed
 
 
 class PosService:
@@ -208,8 +232,19 @@ class PosService:
         franchise_id = self._require_pos_franchise(profile)
         now = datetime.now(timezone.utc)
         items: list[PosOffer] = []
+        promotions = {str(row['id']): row for row in self.repo.list_promotions()}
+        promo_scope = self.repo.list_promotion_franchise_map(list(promotions.keys()))
         for row in self.repo.list_offers():
-            if not offer_is_applicable(row, franchise_id=franchise_id, now=now):
+            promotion_id = row.get('promotion_id')
+            promotion = promotions.get(str(promotion_id)) if promotion_id else None
+            allowed = set(promo_scope.get(str(promotion_id), [])) if promotion_id else set()
+            if not offer_is_applicable(
+                row,
+                franchise_id=franchise_id,
+                now=now,
+                promotion=promotion,
+                promotion_franchise_ids=allowed,
+            ):
                 continue
             items.append(
                 PosOffer(

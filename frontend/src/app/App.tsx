@@ -32,6 +32,9 @@ import { OffersPage } from '../features/settings/OwnerOffersPage';
 import { PromotionsPage } from '../features/settings/PromotionsPage';
 import { DailySalesPage } from '../features/reports/DailySalesPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
+import { AuditsPage } from '../features/audits/AuditsPage';
+import { CreateAuditPage } from '../features/audits/CreateAuditPage';
+import { AuditDetailPage } from '../features/audits/AuditDetailPage';
 
 export default function App() {
   return (
@@ -63,6 +66,9 @@ export default function App() {
           <Route element={<ProtectedRoute roles={['SYSTEM_ADMIN', 'FRANCHISE_OWNER']} />}>
             <Route path="dashboard" element={<HomePage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="audit" element={<AuditsPage />} />
+            <Route path="audit/new" element={<CreateAuditPage />} />
+            <Route path="audit/:auditId" element={<AuditDetailPage />} />
           </Route>
 
           <Route element={<ProtectedRoute roles={['SYSTEM_ADMIN']} />}>
@@ -75,10 +81,6 @@ export default function App() {
             <Route path="settings/offers" element={<Navigate to="/admin/promotions" replace />} />
             <Route path="admin/promotions" element={<PromotionsPage />} />
             <Route path="admin/gallery" element={<AdminGalleryPage />} />
-            <Route
-              path="audit"
-              element={<Placeholder title="Audit" note="Quality audits coming in a later milestone." />}
-            />
           </Route>
 
           <Route element={<ProtectedRoute roles={['FRANCHISE_OWNER']} />}>
@@ -110,14 +112,5 @@ export default function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </>
-  );
-}
-
-function Placeholder({ title, note }: { title: string; note: string }) {
-  return (
-    <div>
-      <h1 className="font-serif text-3xl font-bold">{title}</h1>
-      <p className="mt-2 text-sm text-[#8A8A84]">{note}</p>
-    </div>
   );
 }

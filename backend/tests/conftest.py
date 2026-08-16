@@ -406,6 +406,7 @@ def client(monkeypatch, fake_db):
     monkeypatch.setattr('app.modules.settings.repository.get_supabase', lambda: fake_db)
     monkeypatch.setattr('app.modules.public.repository.get_supabase', lambda: fake_db)
     monkeypatch.setattr('app.modules.gallery.repository.get_supabase', lambda: fake_db)
+    monkeypatch.setattr('app.modules.audits.repository.get_supabase', lambda: fake_db)
     return TestClient(app)
 
 

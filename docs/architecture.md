@@ -108,3 +108,29 @@ Migration `0009` adds `profiles.login_id`, promotions tables, `discounts.promoti
 POS tablet work is layout-only: AppShell uses a drawer below `lg` on `/pos`, the cart stacks under the product grid below `lg`, and touch targets are enlarged. Checkout, GST, offers, bill numbering, and thermal receipt CSS are unchanged.
 
 Future optimization only (not implemented): an index on `orders (status, completed_at)` may help when completed-bill volume grows. Existing franchise/status indexes are sufficient for the current POC scale.
+
+## Franchise Operational Audit (M11)
+
+A completed audit is an immutable operational inspection of a franchise. It is not a system audit log, activity history, quality score, or draft/submit workflow.
+
+Data model (migration `0010` only; `0001`–`0009` unchanged):
+
+- `franchise_audit_status` enum: `PASS`, `NEEDS_ATTENTION`, `FAIL`
+- `franchise_audits` — franchise, audit date, overall status, remarks, plus `franchise_name_snapshot` and `auditor_name_snapshot`
+- `franchise_audit_items` — snapshotted `checklist_item` text, `item_key`, `display_order`, status, remarks
+- RLS enabled; no anon/authenticated policies. FastAPI uses the service role.
+
+Legacy `quality_audits` / `quality_audit_items` from migration `0001` are unused and untouched.
+
+Authorization:
+
+- `SYSTEM_ADMIN` can list, create, and view audits for every franchise
+- `FRANCHISE_OWNER` is scoped to `profile.franchise_id` on list, create, and detail
+- `EMPLOYEE` has no navigation, no routes, and receives 403 from `/api/v1/audits`
+- Owner detail access to another franchise returns `404 Audit not found`
+
+The 10-item checklist is a backend constant (`FRANCHISE_OPERATIONAL_CHECKLIST`), not a database table. The frontend may mirror the labels; the server validates keys, rejects extras/duplicates, and stores the canonical item text at create time.
+
+`overall_status` is calculated server-side (FAIL if any item is FAIL; else NEEDS_ATTENTION if any item needs attention; else PASS). Historical list/detail views use snapshots only — later franchise or profile renames do not change old audits.
+
+Create is one atomic operation: parent row plus all 10 items. There is no PATCH, DELETE, draft, scheduling, attachments, scoring, or analytics.

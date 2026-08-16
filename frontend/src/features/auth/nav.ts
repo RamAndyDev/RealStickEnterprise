@@ -71,7 +71,7 @@ export const APP_NAV: NavItem[] = [
   {
     label: 'Audit',
     path: '/audit',
-    roles: ['SYSTEM_ADMIN'],
+    roles: ['SYSTEM_ADMIN', 'FRANCHISE_OWNER'],
   },
   {
     label: 'Profile',

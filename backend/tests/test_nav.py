@@ -322,8 +322,27 @@ def test_unauthenticated_staff_routes_still_use_protected_route():
         'owner/menu',
         'admin/gallery',
         'reports',
+        'audit',
     ):
         assert f'path="{path}"' in protected
+
+
+def test_admin_and_owner_see_audit_employee_does_not():
+    assert '/audit' in _paths_for_role('SYSTEM_ADMIN')
+    assert '/audit' in _paths_for_role('FRANCHISE_OWNER')
+    assert '/audit' not in _paths_for_role('EMPLOYEE')
+    employee_labels = {label for label, path, roles in _nav_items() if 'EMPLOYEE' in roles}
+    assert 'Audit' not in employee_labels
+    source = APP_TSX.read_text(encoding='utf-8')
+    assert 'AuditsPage' in source
+    assert 'CreateAuditPage' in source
+    assert 'AuditDetailPage' in source
+    assert 'Quality audits coming in a later milestone' not in source
+    assert "roles={['SYSTEM_ADMIN', 'FRANCHISE_OWNER']}" in source
+    assert not re.search(
+        r"ProtectedRoute roles=\{\['EMPLOYEE'\]\} />\}>\s*<Route path=\"audit\"",
+        source,
+    )
 
 
 def test_receipt_route_remains_outside_appshell():

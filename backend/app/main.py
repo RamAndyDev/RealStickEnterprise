@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.modules import auth, franchises, gallery, health, orders, pos, products, public, reports, users
+from app.modules import audits, auth, franchises, gallery, health, orders, pos, products, public, reports, users
 from app.modules.settings import owner_router as owner_settings_router
 from app.modules.settings import router as admin_settings_router
 
@@ -29,6 +29,7 @@ app.include_router(owner_settings_router, prefix=settings.api_prefix)
 app.include_router(pos.router, prefix=settings.api_prefix)
 app.include_router(orders.router, prefix=settings.api_prefix)
 app.include_router(reports.router, prefix=settings.api_prefix)
+app.include_router(audits.router, prefix=settings.api_prefix)
 app.include_router(public.router, prefix=settings.api_prefix)
 app.include_router(gallery.admin_router, prefix=settings.api_prefix)
 app.include_router(gallery.public_router, prefix=settings.api_prefix)

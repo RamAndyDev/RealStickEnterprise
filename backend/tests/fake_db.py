@@ -300,6 +300,13 @@ class FakeQuery:
                     row.setdefault('author_name', None)
                     row.setdefault('storage_path', None)
                     row.setdefault('media_url', None)
+                if self._table == 'franchise_audit_items':
+                    for existing in table_rows:
+                        if (
+                            str(existing.get('audit_id')) == str(row.get('audit_id'))
+                            and existing.get('item_key') == row.get('item_key')
+                        ):
+                            raise Exception('duplicate key value violates unique constraint')
                 table_rows.append(row)
                 created.append(deepcopy(row))
             return FakeResult(created)
@@ -370,6 +377,12 @@ class FakeQuery:
             self._db.tables[self._table] = [
                 r for r in table_rows if str(r.get('id')) not in ids
             ]
+            if self._table == 'franchise_audits' and ids:
+                self._db.tables['franchise_audit_items'] = [
+                    row
+                    for row in self._db.tables.get('franchise_audit_items', [])
+                    if str(row.get('audit_id')) not in ids
+                ]
             return FakeResult(deleted)
 
         # select
@@ -555,6 +568,8 @@ class FakeDatabase:
         gallery_items: list[dict] | None = None,
         promotions: list[dict] | None = None,
         promotion_franchises: list[dict] | None = None,
+        franchise_audits: list[dict] | None = None,
+        franchise_audit_items: list[dict] | None = None,
         auth_users: list[Any] | None = None,
     ):
         self.tables: dict[str, list[dict]] = {
@@ -573,6 +588,8 @@ class FakeDatabase:
             'gallery_items': deepcopy(gallery_items or []),
             'promotions': deepcopy(promotions or []),
             'promotion_franchises': deepcopy(promotion_franchises or []),
+            'franchise_audits': deepcopy(franchise_audits or []),
+            'franchise_audit_items': deepcopy(franchise_audit_items or []),
         }
         self.auth = FakeAuth(auth_users or [])
         self.storage_objects: dict[tuple[str, str], dict] = {}

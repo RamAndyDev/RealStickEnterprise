@@ -207,8 +207,37 @@ Brand-level items use `franchise_id = NULL`. Prefer archive (`is_archived`) over
 
 Never expose these, the Supabase service-role key, or passwords to the React app.
 
+## Franchise Operational Audit (SYSTEM_ADMIN, FRANCHISE_OWNER)
+
+Operational checklist inspections. This is not a system/activity/security audit log.
+Completed audits are immutable historical snapshots. There is no PATCH or DELETE.
+
+Roles:
+
+- `SYSTEM_ADMIN` — list/create/view audits for all franchises. Optional `franchise_id` filter.
+- `FRANCHISE_OWNER` — list/create/view audits for `profile.franchise_id` only. Client `franchise_id` is ignored.
+- `EMPLOYEE` — 403 on every `/audits` endpoint.
+- Unauthenticated — 401.
+
+Endpoints:
+
+- `GET /audits` — paginated list. Query: `franchise_id?`, `from_date?`, `to_date?`, `overall_status?`, `page=1`, `page_size=20` (max 100).
+  Response: `{ "items", "page", "page_size", "total" }`. List rows use stored `franchise_name_snapshot` / `auditor_name_snapshot`.
+- `POST /audits` — create and complete in one operation (HTTP 201). Body: `{ "franchise_id?", "audit_date", "remarks?", "items" }`.
+  Admin must supply `franchise_id` (unknown franchise → 404). Owner franchise is always the authenticated owner's franchise.
+  `auditor_id` / `auditor_name_snapshot` come from the authenticated profile. Client `overall_status` is ignored.
+  Exactly 10 canonical checklist items are required. Invalid/incomplete checklist or future `audit_date` → 422.
+- `GET /audits/{audit_id}` — full detail including items ordered by `display_order`. Owner access to another franchise's audit returns `404 Audit not found`.
+
+Overall status is calculated on the server:
+
+- any item `FAIL` → `FAIL`
+- else any item `NEEDS_ATTENTION` → `NEEDS_ATTENTION`
+- else `PASS`
+
+Canonical checklist keys: `pos_working`, `internet_working`, `receipt_printer_working`, `product_menu_correct`, `selling_prices_correct`, `product_availability_correct`, `billing_process_working`, `payment_methods_working`, `store_presentation`, `general_operation`.
+
 Planned resources (not in this milestone):
 - `/inventory`
-- `/audits`
 - `/coupons`
 - franchise applications

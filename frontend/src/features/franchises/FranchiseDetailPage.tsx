@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import {
@@ -6,15 +7,22 @@ import {
   Button,
   ErrorBanner,
   LoadingBlock,
+  SuccessBanner,
 } from '../../components/ui';
 import { getFranchise } from '../../lib/franchisesApi';
+import type { FranchiseDetail } from '../../types/franchise';
 import { FranchiseProductsPanel } from '../products/FranchiseProductsPanel';
 import { LaunchProgressTrack } from './LaunchProgress';
+import { PaymentHistorySection } from './PaymentHistorySection';
+import { RecordOfflinePaymentDialog } from './RecordOfflinePaymentDialog';
 import { deriveLaunchProgress } from './launchStages';
 import { apiErrorMessage, formatDate, statusLabel, statusTone } from './status';
 
 export function FranchiseDetailPage() {
   const { franchiseId } = useParams<{ franchiseId: string }>();
+  const queryClient = useQueryClient();
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const detailQuery = useQuery({
     queryKey: ['admin-franchise', franchiseId],
@@ -43,6 +51,13 @@ export function FranchiseDetailPage() {
     payment_status: franchise.payment_status,
   });
 
+  async function handlePaymentSaved(updated: FranchiseDetail) {
+    setFeedback('Offline payment recorded successfully.');
+    queryClient.setQueryData(['admin-franchise', franchiseId], updated);
+    await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
+    await queryClient.invalidateQueries({ queryKey: ['admin-franchise', franchiseId] });
+  }
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-4">
@@ -50,6 +65,12 @@ export function FranchiseDetailPage() {
           ← Franchise Outlets
         </Link>
       </div>
+
+      {feedback ? (
+        <div className="mb-4">
+          <SuccessBanner message={feedback} />
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-[10px] border border-[#E0DDD5] bg-white">
         <div className="px-5 py-4" style={{ background: headerBg }}>
@@ -95,6 +116,11 @@ export function FranchiseDetailPage() {
         />
       </section>
 
+      <PaymentHistorySection
+        payments={franchise.payments}
+        onRecord={() => setPaymentOpen(true)}
+      />
+
       <section className="mt-6 mb-8">
         <FranchiseProductsPanel franchiseId={franchise.id} franchiseName={franchise.name} />
       </section>
@@ -104,6 +130,15 @@ export function FranchiseDetailPage() {
           Back
         </Button>
       </div>
+
+      {paymentOpen ? (
+        <RecordOfflinePaymentDialog
+          franchiseId={franchise.id}
+          paymentStatus={franchise.payment_status}
+          onClose={() => setPaymentOpen(false)}
+          onSaved={handlePaymentSaved}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type {
   FranchiseDetail,
   FranchiseListResponse,
+  FranchiseOfflinePaymentPayload,
   FranchiseStatus,
   FranchiseWritePayload,
   LaunchChecklistItem,
@@ -80,6 +81,14 @@ export async function createFranchiseOwner(
     `/admin/franchises/${id}/owners`,
     body,
   );
+  return data;
+}
+
+export async function recordOfflineFranchisePayment(
+  id: string,
+  payload: FranchiseOfflinePaymentPayload,
+): Promise<FranchiseDetail> {
+  const { data } = await api.post<FranchiseDetail>(`/admin/franchises/${id}/payments`, payload);
   return data;
 }
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from uuid import UUID
 
@@ -42,6 +43,38 @@ class FranchiseStatus(StrEnum):
 
 
 FRANCHISE_TIERS = frozenset({'Founder', 'Growth', 'Scale', 'Elite'})
+
+# Stored as franchise_payments.payment_method (text). Distinct from POS CASH/UPI/CARD.
+class FranchisePaymentMethod(StrEnum):
+    CASH = 'CASH'
+    BANK_TRANSFER = 'BANK_TRANSFER'
+    UPI = 'UPI'
+    CHEQUE = 'CHEQUE'
+    OTHER = 'OTHER'
+
+
+# Existing franchise_payments.status check constraint values.
+class FranchisePaymentStatus(StrEnum):
+    PENDING = 'PENDING'
+    COMPLETED = 'COMPLETED'
+    FAILED = 'FAILED'
+    REFUNDED = 'REFUNDED'
+
+
+def _require_positive_paid_amount(value: object) -> Decimal:
+    if value is None or value == '':
+        raise ValueError('Paid amount is required')
+    if isinstance(value, bool):
+        raise ValueError('Paid amount must be a number greater than 0')
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError('Paid amount must be a number greater than 0') from exc
+    if amount.as_tuple().exponent < -2:
+        raise ValueError('Paid amount must have at most 2 decimal places')
+    if amount <= 0:
+        raise ValueError('Paid amount must be greater than 0')
+    return amount
 
 
 class FranchiseOwnerSummary(BaseModel):
@@ -276,6 +309,24 @@ class FranchiseOwnerCreateResponse(BaseModel):
 
 class LaunchChecklistItemUpdate(BaseModel):
     is_completed: bool
+
+
+class FranchiseOfflinePaymentCreate(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    paid_at: date
+    payment_method: FranchisePaymentMethod
+    reference_number: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator('amount', mode='before')
+    @classmethod
+    def validate_amount(cls, value: object) -> Decimal:
+        return _require_positive_paid_amount(value)
+
+    @field_validator('reference_number', 'notes', mode='before')
+    @classmethod
+    def strip_optional(cls, value: object) -> str | None:
+        return _strip_text(value)
 
 
 class FranchiseListResponse(BaseModel):

@@ -413,3 +413,154 @@ def test_launch_checklist_progress_retrieval_works(client, auth_header_factory):
     )
     assert updated.status_code == 200
     assert updated.json()['is_completed'] is True
+
+
+def _offline_payment_payload(**overrides):
+    body = {
+        'amount': 250000.50,
+        'paid_at': '2026-08-20',
+        'payment_method': 'BANK_TRANSFER',
+        'reference_number': 'NEFT-8891',
+        'notes': 'Received at head office',
+    }
+    body.update(overrides)
+    return body
+
+
+def test_admin_can_record_offline_franchise_payment(client, auth_header_factory, fake_db):
+    before = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_B)
+    ]
+    assert before == []
+
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['payment_status'] == 'COMPLETED'
+    assert len(body['payments']) == 1
+    payment = body['payments'][0]
+    assert payment['status'] == 'COMPLETED'
+    assert payment['amount'] == 250000.50
+    assert payment['payment_method'] == 'BANK_TRANSFER'
+    assert payment['reference_number'] == 'NEFT-8891'
+    assert payment['notes'] == 'Received at head office'
+    assert payment['paid_at'].startswith('2026-08-20')
+
+    stored = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_B)
+    ]
+    assert len(stored) == 1
+    assert stored[0]['status'] == 'COMPLETED'
+
+
+def test_non_admin_cannot_record_offline_franchise_payment(client, auth_header_factory):
+    owner = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(OWNER_ID, 'owner@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    employee = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(EMPLOYEE_ID, 'employee@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    assert owner.status_code == 403
+    assert employee.status_code == 403
+
+
+def test_offline_payment_rejects_non_positive_amount(client, auth_header_factory):
+    zero = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(amount=0),
+    )
+    negative = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(amount=-10),
+    )
+    extra_decimals = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(amount='12.345'),
+    )
+    assert zero.status_code == 422
+    assert negative.status_code == 422
+    assert extra_decimals.status_code == 422
+
+
+def test_offline_payment_rejects_invalid_payment_method(client, auth_header_factory):
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(payment_method='CARD'),
+    )
+    assert response.status_code == 422
+
+    missing = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(payment_method='NOT_A_METHOD'),
+    )
+    assert missing.status_code == 422
+
+    bad_date = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(paid_at='21-08-2026'),
+    )
+    assert bad_date.status_code == 422
+
+
+def test_offline_payment_preserves_existing_payment_history(client, auth_header_factory, fake_db):
+    existing = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_A)
+    ]
+    assert len(existing) == 1
+    original_id = existing[0]['id']
+    original_reference = existing[0]['reference_number']
+
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(
+            amount=1000,
+            payment_method='CASH',
+            reference_number='CASH-002',
+            notes=None,
+        ),
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['payment_status'] == 'COMPLETED'
+    assert len(body['payments']) == 2
+    references = {item['reference_number'] for item in body['payments']}
+    assert original_reference in references
+    assert 'CASH-002' in references
+
+    stored = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_A)
+    ]
+    assert len(stored) == 2
+    assert any(row['id'] == original_id and row['reference_number'] == original_reference for row in stored)
+
+
+def test_offline_payment_unknown_franchise_is_not_found(client, auth_header_factory):
+    response = client.post(
+        f'/api/v1/admin/franchises/{uuid4()}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    assert response.status_code == 404

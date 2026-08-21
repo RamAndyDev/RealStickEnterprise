@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -18,7 +18,9 @@ from app.modules.franchises.schemas import (
     FranchiseOwnerAssign,
     FranchiseOwnerCreate,
     FranchiseOwnerCreateResponse,
+    FranchiseOfflinePaymentCreate,
     FranchiseOwnerSummary,
+    FranchisePaymentStatus,
     FranchisePaymentSummary,
     FranchiseStatus,
     FranchiseStatusUpdate,
@@ -473,6 +475,35 @@ class FranchiseService:
                 detail='Launch checklist item not found',
             )
         return LaunchChecklistItem.model_validate(updated)
+
+    def record_offline_payment(
+        self,
+        franchise_id: UUID,
+        data: FranchiseOfflinePaymentCreate,
+    ) -> FranchiseDetail:
+        if not self.repo.get_franchise(franchise_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Franchise not found')
+
+        paid_at = datetime.combine(data.paid_at, time(12, 0), tzinfo=timezone.utc)
+        payload = {
+            'franchise_id': str(franchise_id),
+            'amount': float(data.amount),
+            'currency': 'INR',
+            'payment_method': data.payment_method.value,
+            'reference_number': data.reference_number,
+            'status': FranchisePaymentStatus.COMPLETED.value,
+            'paid_at': paid_at.isoformat(),
+            'notes': data.notes,
+        }
+        try:
+            self.repo.create_payment(payload)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to record franchise payment',
+            ) from exc
+
+        return self.get_franchise(franchise_id)
 
     def _to_list_item(
         self,

@@ -18,6 +18,7 @@ from app.modules.franchises.schemas import (
     FranchiseOwnerCreateResponse,
     FranchiseStatus,
     FranchiseStatusUpdate,
+    FranchiseOfflinePaymentCreate,
     FranchiseUpdate,
     LaunchChecklistItem,
     LaunchChecklistItemUpdate,
@@ -108,6 +109,20 @@ def create_franchise_owner(
     service: FranchiseService = Depends(get_franchise_service),
 ) -> FranchiseOwnerCreateResponse:
     return service.create_owner(franchise_id, body, profile)
+
+
+@router.post(
+    '/franchises/{franchise_id}/payments',
+    response_model=FranchiseDetail,
+    status_code=201,
+)
+def record_offline_franchise_payment(
+    franchise_id: UUID,
+    body: FranchiseOfflinePaymentCreate,
+    _: SystemAdmin,
+    service: FranchiseService = Depends(get_franchise_service),
+) -> FranchiseDetail:
+    return service.record_offline_payment(franchise_id, body)
 
 
 @router.get('/franchises/{franchise_id}/launch-checklist', response_model=list[LaunchChecklistItem])

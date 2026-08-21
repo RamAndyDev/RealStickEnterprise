@@ -290,6 +290,13 @@ class FranchiseRepository:
         )
         return list(response.data or [])
 
+    def create_payment(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._db.table('franchise_payments').insert(payload).execute()
+        rows = response.data or []
+        if not rows:
+            raise RuntimeError('Franchise payment insert returned no data')
+        return rows[0]
+
     def latest_payment_status_map(self, franchise_ids: list[str]) -> dict[str, str]:
         if not franchise_ids:
             return {}

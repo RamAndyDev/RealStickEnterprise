@@ -126,13 +126,23 @@ describe('Franchise Detail hidden sections', () => {
     assert.equal(page.includes('franchise.applications'), false);
   });
 
-  it('does not render the Payment Status section', () => {
+  it('does not restore the old Payment Status section', () => {
     assert.equal(page.includes('Payment Status'), false);
-    assert.equal(page.includes('franchise.payments'), false);
+  });
+
+  it('does not restore the old 8-step launch checklist', () => {
+    assert.equal(page.includes('launch_checklist'), false);
+    assert.equal(page.includes('Franchise agreement signed'), false);
   });
 
   it('keeps Launch Progress and product assignment as the primary detail sections', () => {
     assert.equal(page.includes('LaunchProgressTrack'), true);
     assert.equal(page.includes('FranchiseProductsPanel'), true);
+  });
+
+  it('exposes Record Offline Payment and Payment History without restoring the old payment table', () => {
+    assert.equal(page.includes('RecordOfflinePaymentDialog'), true);
+    assert.equal(page.includes('PaymentHistorySection'), true);
+    assert.equal(page.includes('payments={franchise.payments}'), true);
   });
 });

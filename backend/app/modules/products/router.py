@@ -121,6 +121,15 @@ def update_product(
     return service.update_product(product_id, body)
 
 
+@router.delete('/products/{product_id}', status_code=204)
+def delete_product(
+    product_id: UUID,
+    _: SystemAdmin,
+    service: ProductService = Depends(get_product_service),
+) -> None:
+    service.delete_product(product_id)
+
+
 @router.post('/products/{product_id}/image', response_model=Product)
 async def upload_product_image(
     product_id: UUID,

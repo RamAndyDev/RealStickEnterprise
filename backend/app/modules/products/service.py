@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import HTTPException, UploadFile, status
 
 from app.core.security import CurrentProfile
+from app.modules.products.constants import PRODUCT_DELETE_BLOCKED_DETAIL
 from app.modules.products.images import (
     build_product_image_path,
     image_metadata,
@@ -305,6 +306,40 @@ class ProductService:
             ) from exc
 
         return self.get_product(product_id)
+
+    def delete_product(self, product_id: UUID) -> None:
+        existing = self.repo.get_product(product_id)
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Product not found')
+
+        if self.repo.product_has_business_references(product_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=PRODUCT_DELETE_BLOCKED_DETAIL,
+            )
+
+        try:
+            deleted = self.repo.delete_product(product_id)
+        except Exception as exc:
+            if self.repo.is_foreign_key_violation(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=PRODUCT_DELETE_BLOCKED_DETAIL,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to delete product',
+            ) from exc
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Product not found')
+
+        meta = existing.get('metadata') or {}
+        path = meta.get('image_path') if isinstance(meta, dict) else None
+        if path:
+            try:
+                self.repo.remove_product_image(str(path))
+            except Exception:
+                pass
 
     # ── Product images ──────────────────────────────────────────────────────
 

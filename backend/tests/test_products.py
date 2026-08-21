@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from io import BytesIO
+from uuid import uuid4
 
+from app.modules.products.constants import PRODUCT_DELETE_BLOCKED_DETAIL
 from tests.conftest import (
     ADMIN_ID,
+    CATEGORY_HARVEST,
     CATEGORY_ZEST,
     EMPLOYEE_ID,
     FRANCHISE_A,
@@ -448,3 +452,191 @@ def test_non_admin_cannot_upload_product_images(client, auth_header_factory):
             headers=headers,
         )
         assert delete.status_code == 403
+
+
+def _create_unused_product(client, headers, *, name: str = 'Disposable Stick', is_active: bool = True):
+    response = client.post(
+        '/api/v1/admin/products',
+        headers=headers,
+        json={
+            'name': name,
+            'category_id': str(CATEGORY_HARVEST),
+            'price': 15,
+            'is_active': is_active,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_admin_can_delete_unused_product(client, auth_header_factory, fake_db):
+    headers = _admin(auth_header_factory)
+    created = _create_unused_product(client, headers)
+    product_id = created['id']
+    ids_before = {row['id'] for row in fake_db.tables['products']}
+
+    response = client.delete(f'/api/v1/admin/products/{product_id}', headers=headers)
+    assert response.status_code == 204
+
+    ids_after = {row['id'] for row in fake_db.tables['products']}
+    assert product_id not in ids_after
+    assert ids_after == ids_before - {product_id}
+
+    missing = client.get(f'/api/v1/admin/products/{product_id}', headers=headers)
+    assert missing.status_code == 404
+
+
+def test_admin_can_delete_unused_inactive_product(client, auth_header_factory):
+    headers = _admin(auth_header_factory)
+    created = _create_unused_product(client, headers, name='Hidden Disposable', is_active=False)
+    response = client.delete(f'/api/v1/admin/products/{created["id"]}', headers=headers)
+    assert response.status_code == 204
+
+
+def test_non_admin_cannot_delete_product(client, auth_header_factory):
+    for headers in (_owner(auth_header_factory), _employee(auth_header_factory)):
+        response = client.delete(
+            f'/api/v1/admin/products/{PRODUCT_ORANGE}',
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+
+def test_unknown_product_delete_returns_404(client, auth_header_factory):
+    response = client.delete(
+        f'/api/v1/admin/products/{uuid4()}',
+        headers=_admin(auth_header_factory),
+    )
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'Product not found'
+
+
+def test_franchise_product_prices_block_product_delete(client, auth_header_factory, fake_db):
+    headers = _admin(auth_header_factory)
+    assignments_before = deepcopy(fake_db.tables['franchise_product_prices'])
+    response = client.delete(f'/api/v1/admin/products/{PRODUCT_NIMBU}', headers=headers)
+    assert response.status_code == 409
+    assert response.json()['detail'] == PRODUCT_DELETE_BLOCKED_DETAIL
+    assert any(row['id'] == str(PRODUCT_NIMBU) for row in fake_db.tables['products'])
+    assert fake_db.tables['franchise_product_prices'] == assignments_before
+
+    still_active = client.get(f'/api/v1/admin/products/{PRODUCT_NIMBU}', headers=headers)
+    assert still_active.status_code == 200
+    assert still_active.json()['is_active'] is True
+
+
+def test_order_items_block_product_delete(client, auth_header_factory, fake_db):
+    headers = _admin(auth_header_factory)
+    created = _create_unused_product(client, headers, name='Sold Stick')
+    product_id = created['id']
+    fake_db.tables['order_items'].append(
+        {
+            'id': str(uuid4()),
+            'order_id': str(uuid4()),
+            'product_id': product_id,
+            'product_name_snapshot': created['name'],
+            'unit_price': 15,
+            'quantity': 1,
+            'line_discount_amount': 0,
+            'line_total': 15,
+        }
+    )
+    items_before = deepcopy(fake_db.tables['order_items'])
+
+    response = client.delete(f'/api/v1/admin/products/{product_id}', headers=headers)
+    assert response.status_code == 409
+    assert response.json()['detail'] == PRODUCT_DELETE_BLOCKED_DETAIL
+    assert any(row['id'] == product_id for row in fake_db.tables['products'])
+    assert fake_db.tables['order_items'] == items_before
+
+
+def test_recipe_items_block_product_delete(client, auth_header_factory, fake_db):
+    headers = _admin(auth_header_factory)
+    created = _create_unused_product(client, headers, name='Recipe Stick')
+    product_id = created['id']
+    recipe_id = str(uuid4())
+    fake_db.tables['recipes'].append(
+        {
+            'id': recipe_id,
+            'product_id': product_id,
+            'name': 'Recipe Stick recipe',
+            'yield_quantity': 1,
+            'is_active': True,
+        }
+    )
+    fake_db.tables['recipe_items'].append(
+        {
+            'id': str(uuid4()),
+            'recipe_id': recipe_id,
+            'ingredient_id': str(uuid4()),
+            'quantity': 30,
+            'unit': 'ml',
+        }
+    )
+    recipes_before = deepcopy(fake_db.tables['recipes'])
+    items_before = deepcopy(fake_db.tables['recipe_items'])
+
+    response = client.delete(f'/api/v1/admin/products/{product_id}', headers=headers)
+    assert response.status_code == 409
+    assert response.json()['detail'] == PRODUCT_DELETE_BLOCKED_DETAIL
+    assert any(row['id'] == product_id for row in fake_db.tables['products'])
+    assert fake_db.tables['recipes'] == recipes_before
+    assert fake_db.tables['recipe_items'] == items_before
+
+
+def test_inventory_movements_block_product_delete(client, auth_header_factory, fake_db):
+    headers = _admin(auth_header_factory)
+    created = _create_unused_product(client, headers, name='Stocked Stick')
+    product_id = created['id']
+    fake_db.tables['inventory_movements'].append(
+        {
+            'id': str(uuid4()),
+            'franchise_id': str(FRANCHISE_A),
+            'ingredient_id': str(uuid4()),
+            'movement_type': 'CONSUMPTION',
+            'quantity': 1,
+            'reference_type': 'product',
+            'reference_id': product_id,
+        }
+    )
+    movements_before = deepcopy(fake_db.tables['inventory_movements'])
+
+    response = client.delete(f'/api/v1/admin/products/{product_id}', headers=headers)
+    assert response.status_code == 409
+    assert response.json()['detail'] == PRODUCT_DELETE_BLOCKED_DETAIL
+    assert any(row['id'] == product_id for row in fake_db.tables['products'])
+    assert fake_db.tables['inventory_movements'] == movements_before
+
+
+def test_successful_product_delete_does_not_remove_unrelated_records(
+    client, auth_header_factory, fake_db
+):
+    headers = _admin(auth_header_factory)
+    created = _create_unused_product(client, headers, name='Lone Stick')
+    keep = _create_unused_product(client, headers, name='Keep Stick')
+    products_before = {row['id'] for row in fake_db.tables['products']}
+    assignments_before = deepcopy(fake_db.tables['franchise_product_prices'])
+    orange_before = deepcopy(
+        next(row for row in fake_db.tables['products'] if row['id'] == str(PRODUCT_ORANGE))
+    )
+
+    response = client.delete(f'/api/v1/admin/products/{created["id"]}', headers=headers)
+    assert response.status_code == 204
+
+    remaining = {row['id'] for row in fake_db.tables['products']}
+    assert created['id'] not in remaining
+    assert keep['id'] in remaining
+    assert str(PRODUCT_NIMBU) in remaining
+    assert str(PRODUCT_ORANGE) in remaining
+    assert remaining == products_before - {created['id']}
+    assert fake_db.tables['franchise_product_prices'] == assignments_before
+    orange_after = next(row for row in fake_db.tables['products'] if row['id'] == str(PRODUCT_ORANGE))
+    assert orange_after == orange_before
+
+
+def test_blocked_product_delete_does_not_deactivate(client, auth_header_factory):
+    headers = _admin(auth_header_factory)
+    response = client.delete(f'/api/v1/admin/products/{PRODUCT_NIMBU}', headers=headers)
+    assert response.status_code == 409
+    product = client.get(f'/api/v1/admin/products/{PRODUCT_NIMBU}', headers=headers)
+    assert product.json()['is_active'] is True

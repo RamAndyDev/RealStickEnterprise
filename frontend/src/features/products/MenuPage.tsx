@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import {
   ActionButton,
@@ -27,6 +27,8 @@ import {
 import { formatINR, type Product, type ProductCategory } from '../../types/product';
 import { apiErrorMessage } from '../franchises/status';
 import { categoryColor } from './categoryColors';
+import { DELETE_PRODUCT_SUCCESS } from './deleteProduct';
+import { DeleteProductDialog } from './DeleteProductDialog';
 import {
   ProductForm,
   emptyProductForm,
@@ -38,11 +40,14 @@ import { ProductImage } from './ProductImage';
 
 export function MenuPage() {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editCategory, setEditCategory] = useState<ProductCategory | null>(null);
@@ -55,6 +60,14 @@ export function MenuPage() {
     const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => window.clearTimeout(handle);
   }, [search]);
+
+  useEffect(() => {
+    const state = location.state as { productDeleted?: boolean } | null;
+    if (!state?.productDeleted) return;
+    setFeedback(DELETE_PRODUCT_SUCCESS);
+    setError(null);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const categoriesQuery = useQuery({
     queryKey: ['admin-product-categories'],
@@ -429,6 +442,9 @@ export function MenuPage() {
                       >
                         {item.is_active ? 'Active' : 'Hidden'}
                       </ActionButton>
+                      <ActionButton variant="danger" onClick={() => setDeleteTarget(item)}>
+                        Delete
+                      </ActionButton>
                     </ActionGroup>
                   </div>
                 ))
@@ -464,6 +480,19 @@ export function MenuPage() {
             onSubmit={(values) => createMutation.mutate(values)}
           />
         </Modal>
+      ) : null}
+
+      {deleteTarget ? (
+        <DeleteProductDialog
+          productId={deleteTarget.id}
+          productName={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={async () => {
+            setFeedback(DELETE_PRODUCT_SUCCESS);
+            setError(null);
+            await invalidate();
+          }}
+        />
       ) : null}
 
       {editTarget ? (

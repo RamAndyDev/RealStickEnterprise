@@ -26,6 +26,7 @@ import {
 } from '../../types/product';
 import { apiErrorMessage } from '../franchises/status';
 import { AssignProductsDialog } from './AssignProductsDialog';
+import { assignmentUpdateSuccessMessage } from './assignmentUpdate';
 import { categoryColor } from './categoryColors';
 import { ProductImage } from './ProductImage';
 
@@ -65,9 +66,9 @@ export function FranchiseProductsPanel({
       selling_price?: number;
       is_active?: boolean;
     }) => updateFranchiseProduct(franchiseId, product_id, { selling_price, is_active }),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       setEditRow(null);
-      setFeedback('Franchise pricing updated.');
+      setFeedback(assignmentUpdateSuccessMessage(variables));
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-franchise-products', franchiseId] });
     },

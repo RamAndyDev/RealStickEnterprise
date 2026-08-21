@@ -372,6 +372,8 @@ class FakeQuery:
 
         if self._action == 'delete':
             matched = self._apply_filters(table_rows)
+            if self._table == 'products':
+                self._db.enforce_product_delete_fks(matched)
             deleted = [deepcopy(r) for r in matched]
             ids = {str(r.get('id')) for r in matched}
             self._db.tables[self._table] = [
@@ -570,6 +572,9 @@ class FakeDatabase:
         promotion_franchises: list[dict] | None = None,
         franchise_audits: list[dict] | None = None,
         franchise_audit_items: list[dict] | None = None,
+        recipes: list[dict] | None = None,
+        recipe_items: list[dict] | None = None,
+        inventory_movements: list[dict] | None = None,
         auth_users: list[Any] | None = None,
     ):
         self.tables: dict[str, list[dict]] = {
@@ -590,6 +595,9 @@ class FakeDatabase:
             'promotion_franchises': deepcopy(promotion_franchises or []),
             'franchise_audits': deepcopy(franchise_audits or []),
             'franchise_audit_items': deepcopy(franchise_audit_items or []),
+            'recipes': deepcopy(recipes or []),
+            'recipe_items': deepcopy(recipe_items or []),
+            'inventory_movements': deepcopy(inventory_movements or []),
         }
         self.auth = FakeAuth(auth_users or [])
         self.storage_objects: dict[tuple[str, str], dict] = {}
@@ -610,6 +618,22 @@ class FakeDatabase:
     def enforce_master_price(self, product_row: dict) -> None:
         # Master price is independent of franchise selling prices.
         return
+
+    def enforce_product_delete_fks(self, products: list[dict]) -> None:
+        """Mirror Postgres NO ACTION FKs on products.id. No CASCADE."""
+        product_ids = {str(row.get('id')) for row in products if row.get('id')}
+        if not product_ids:
+            return
+        for table, column in (
+            ('franchise_product_prices', 'product_id'),
+            ('order_items', 'product_id'),
+            ('recipes', 'product_id'),
+        ):
+            for row in self.tables.get(table, []):
+                if str(row.get(column) or '') in product_ids:
+                    raise Exception(
+                        'update or delete on table "products" violates foreign key constraint'
+                    )
 
     def enforce_profile_rules(
         self,

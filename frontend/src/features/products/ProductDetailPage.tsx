@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import {
   ActionButton,
@@ -29,7 +29,9 @@ import {
   type FranchiseProductAssignment,
 } from '../../types/product';
 import { apiErrorMessage } from '../franchises/status';
+import { assignmentUpdateSuccessMessage } from './assignmentUpdate';
 import { categoryColor } from './categoryColors';
+import { DeleteProductDialog } from './DeleteProductDialog';
 import { ProductImage } from './ProductImage';
 
 type FranchiseAssignmentRow = FranchiseProductAssignment & {
@@ -38,6 +40,7 @@ type FranchiseAssignmentRow = FranchiseProductAssignment & {
 
 export function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +50,7 @@ export function ProductDetailPage() {
   const [assignActive, setAssignActive] = useState(true);
   const [editAssignment, setEditAssignment] = useState<FranchiseAssignmentRow | null>(null);
   const [editPrice, setEditPrice] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
 
   const productQuery = useQuery({
     queryKey: ['admin-product', productId],
@@ -126,9 +130,9 @@ export function ProductDetailPage() {
       selling_price?: number;
       is_active?: boolean;
     }) => updateFranchiseProduct(franchise_id, productId!, { selling_price, is_active }),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       setEditAssignment(null);
-      setFeedback('Franchise pricing updated.');
+      setFeedback(assignmentUpdateSuccessMessage(variables));
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-product-assignments', productId] });
     },
@@ -196,14 +200,18 @@ export function ProductDetailPage() {
               {formatINR(product.price)}
             </div>
             <p className="mt-0.5 text-[10px] text-[#8A8A84]">Reference only</p>
-            <ActionButton
-              fit="lg"
-              variant="outline"
-              className="mt-2"
-              onClick={() => toggleProductMutation.mutate(!product.is_active)}
-            >
-              {product.is_active ? 'Set Hidden' : 'Set Active'}
-            </ActionButton>
+            <ActionGroup align="end" className="mt-2">
+              <ActionButton
+                fit="lg"
+                variant="outline"
+                onClick={() => toggleProductMutation.mutate(!product.is_active)}
+              >
+                {product.is_active ? 'Set Hidden' : 'Set Active'}
+              </ActionButton>
+              <ActionButton variant="danger" onClick={() => setShowDelete(true)}>
+                Delete
+              </ActionButton>
+            </ActionGroup>
           </div>
         </div>
       </div>
@@ -291,6 +299,19 @@ export function ProductDetailPage() {
           ))}
         </div>
       )}
+
+      {showDelete ? (
+        <DeleteProductDialog
+          productId={product.id}
+          productName={product.name}
+          onClose={() => setShowDelete(false)}
+          onDeleted={async () => {
+            await queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+            await queryClient.invalidateQueries({ queryKey: ['admin-product'] });
+            navigate('/products', { state: { productDeleted: true } });
+          }}
+        />
+      ) : null}
 
       {showAssign ? (
         <Modal title="Assign to franchise" onClose={() => setShowAssign(false)}>

@@ -155,12 +155,12 @@ export function setProductSellingPrice(
 export function draftValidationErrors(
   products: AssignProductRow[],
   draft: AssignDraft,
-  validatePrice: (value: string, masterPrice: number | null | undefined) => string | null,
+  validatePrice: (value: string) => string | null,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const product of products) {
     if (!draft[product.id]?.selected) continue;
-    const message = validatePrice(draft[product.id]?.sellingPrice ?? '', product.price);
+    const message = validatePrice(draft[product.id]?.sellingPrice ?? '');
     if (message) errors[product.id] = message;
   }
   return errors;

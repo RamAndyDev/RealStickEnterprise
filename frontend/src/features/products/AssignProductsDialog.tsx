@@ -185,7 +185,7 @@ export function AssignProductsDialog({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           {showValidation && hasValidationErrors ? (
             <p className="text-xs text-red-600 sm:mr-auto">
-              Fix selling prices that exceed the master price before saving.
+              Fix selling prices that are not greater than 0 before saving.
             </p>
           ) : null}
           <div className="flex justify-end gap-2">
@@ -288,7 +288,10 @@ export function AssignProductsDialog({
                                 {product.name}
                               </span>
                               <span className="mt-0.5 block text-[11px] text-[#8A8A84]">
-                                Master {formatINR(product.price)}
+                                Master Price {formatINR(product.price)}
+                              </span>
+                              <span className="block text-[10px] text-[#8A8A84]">
+                                Master Price is for reference only.
                               </span>
                             </span>
                           </label>
@@ -323,6 +326,9 @@ export function AssignProductsDialog({
                                     showError ? 'border-red-500' : 'border-[#E0DDD5]'
                                   }`}
                                 />
+                                <span className="mt-1 block text-[10px] text-[#8A8A84]">
+                                  Set the selling price for this franchise.
+                                </span>
                               </label>
                             ) : (
                               <p className="text-[11px] text-[#8A8A84] sm:pt-0.5 sm:text-right">

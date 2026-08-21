@@ -156,33 +156,38 @@ describe('search filtering', () => {
   });
 });
 
-describe('master price validation', () => {
-  it('allows selling prices below or equal to the master price', () => {
-    assert.equal(sellingPriceError('99', 100), null);
-    assert.equal(sellingPriceError('100', 100), null);
+describe('selling price validation', () => {
+  it('allows selling prices below, equal to, and above the master price', () => {
+    assert.equal(sellingPriceError('50'), null);
+    assert.equal(sellingPriceError('80'), null);
+    assert.equal(sellingPriceError('99'), null);
+    assert.equal(sellingPriceError('100'), null);
+    assert.equal(sellingPriceError('120'), null);
+    assert.equal(sellingPriceError('150'), null);
   });
 
-  it('rejects selling prices above the master price, zero, and negative', () => {
-    assert.equal(
-      sellingPriceError('101', 100),
-      'Selling price must not exceed the master price.',
-    );
-    assert.equal(sellingPriceError('0', 100), 'Selling price must be greater than 0.');
-    assert.equal(sellingPriceError('-1', 100), 'Enter a valid price with up to 2 decimal places.');
+  it('rejects empty, invalid format, zero, and negative selling prices', () => {
+    assert.equal(sellingPriceError(''), 'Franchise selling price is required.');
+    assert.equal(sellingPriceError('0'), 'Selling price must be greater than 0.');
+    assert.equal(sellingPriceError('-1'), 'Enter a valid price with up to 2 decimal places.');
+    assert.equal(sellingPriceError('12.345'), 'Enter a valid price with up to 2 decimal places.');
   });
 
-  it('blocks save for selected products with invalid selling prices', () => {
+  it('blocks save only for selected products with invalid selling prices', () => {
     const catalog = [
       product({ id: 'a', name: 'Chocolate Kulfi', price: 120 }),
       product({ id: 'b', name: 'Pistachio Kulfi', price: 150 }),
+      product({ id: 'c', name: 'Mango Kulfi', price: 100 }),
     ];
     const draft = {
       a: { selected: true, sellingPrice: '120' },
-      b: { selected: true, sellingPrice: '151' },
+      b: { selected: true, sellingPrice: '180' },
+      c: { selected: true, sellingPrice: '0' },
     };
     const errors = draftValidationErrors(catalog, draft, sellingPriceError);
     assert.equal(errors.a, undefined);
-    assert.equal(errors.b, 'Selling price must not exceed the master price.');
+    assert.equal(errors.b, undefined);
+    assert.equal(errors.c, 'Selling price must be greater than 0.');
   });
 });
 

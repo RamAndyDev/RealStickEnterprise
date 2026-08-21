@@ -144,7 +144,7 @@ export function FranchiseProductsPanel({
                   {item.category_name ?? '—'}
                 </div>
                 <div className="text-[11px] text-[#8A8A84]">
-                  Master {formatINR(item.master_price)}
+                  Master {formatINR(item.master_price)} · Reference only
                   {!item.product_is_active ? ' · globally Hidden' : ''}
                   {!item.available_for_pos ? ' · not available for POS' : ''}
                 </div>
@@ -211,20 +211,22 @@ export function FranchiseProductsPanel({
 
       {editRow ? (
         <Modal title="Edit selling price" onClose={() => setEditRow(null)}>
-          <p className="mb-3 text-sm text-[#5C5C56]">
-            {editRow.product_name} · Master {formatINR(editRow.master_price)}
+          <p className="mb-1 text-sm font-medium text-[#1A1A18]">{editRow.product_name}</p>
+          <p className="mb-0.5 text-sm text-[#5C5C56]">
+            Master Price {formatINR(editRow.master_price)}
           </p>
+          <p className="mb-3 text-[11px] text-[#8A8A84]">Master Price is for reference only.</p>
           <Field
             label="Franchise Selling Price (₹)"
             type="number"
             min={0.01}
             step="0.01"
             value={editPrice}
-            error={sellingPriceError(editPrice, editRow.master_price) ?? undefined}
+            error={sellingPriceError(editPrice) ?? undefined}
             onChange={(e) => setEditPrice(e.target.value)}
           />
           <p className="mb-3 text-[11px] text-[#8A8A84]">
-            Must be greater than 0 and must not exceed the master price.
+            Set the selling price for this franchise.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="muted" onClick={() => setEditRow(null)}>
@@ -232,7 +234,7 @@ export function FranchiseProductsPanel({
             </Button>
             <Button
               disabled={
-                Boolean(sellingPriceError(editPrice, editRow.master_price)) ||
+                Boolean(sellingPriceError(editPrice)) ||
                 updateMutation.isPending
               }
               onClick={() =>

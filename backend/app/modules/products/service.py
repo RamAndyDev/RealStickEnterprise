@@ -14,10 +14,8 @@ from app.modules.products.images import (
     strip_image_metadata,
 )
 from app.modules.products.pricing import (
-    MASTER_PRICE_CONFLICT,
     assert_owner_may_edit_selling_price,
     owner_can_edit_selling_price,
-    selling_price_conflicts_with_master,
     validate_selling_price,
 )
 from app.modules.products.repository import ProductRepository
@@ -290,28 +288,12 @@ class ProductService:
             if key in updates and updates[key] is not None:
                 updates[key] = float(updates[key])
 
-        if 'price' in updates and updates['price'] is not None:
-            selling_prices = [
-                row['selling_price']
-                for row in self.repo.list_franchise_prices_for_product(product_id, active_only=True)
-            ]
-            if selling_price_conflicts_with_master(selling_prices, updates['price']):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=MASTER_PRICE_CONFLICT,
-                )
-
         if not updates:
             return self.get_product(product_id)
 
         try:
             self.repo.update_product(product_id, updates)
         except Exception as exc:
-            if MASTER_PRICE_CONFLICT.split('.')[0].lower() in str(exc).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=MASTER_PRICE_CONFLICT,
-                ) from exc
             if self.repo.is_unique_violation(exc):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -440,7 +422,7 @@ class ProductService:
         if not product:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Product not found')
 
-        validate_selling_price(data.selling_price, product['price'])
+        validate_selling_price(data.selling_price)
 
         existing = self.repo.get_franchise_product(franchise_id, data.product_id)
         if existing:
@@ -493,16 +475,13 @@ class ProductService:
 
         updates = data.model_dump(exclude_unset=True)
         if 'selling_price' in updates and updates['selling_price'] is not None:
-            product = self.repo.get_product(product_id)
-            if not product:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Product not found')
-            validate_selling_price(updates['selling_price'], product['price'])
+            validate_selling_price(updates['selling_price'])
             updates['selling_price'] = float(updates['selling_price'])
 
         try:
             updated = self.repo.update_franchise_product(franchise_id, product_id, updates)
         except Exception as exc:
-            if 'selling price' in str(exc).lower() or 'master price' in str(exc).lower():
+            if 'selling price' in str(exc).lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=str(exc),

@@ -195,6 +195,7 @@ export function ProductDetailPage() {
             <div className="font-serif text-2xl font-bold text-[#1A7A4A]">
               {formatINR(product.price)}
             </div>
+            <p className="mt-0.5 text-[10px] text-[#8A8A84]">Reference only</p>
             <ActionButton
               fit="lg"
               variant="outline"
@@ -211,7 +212,8 @@ export function ProductDetailPage() {
         <div>
           <h2 className="font-serif text-lg font-bold text-[#1A1A18]">Franchise pricing</h2>
           <p className="text-xs text-[#8A8A84]">
-            Selling price is what POS will use. Assignment Active/Hidden controls franchise availability.
+            Franchise selling price is independent of master price. Assignment Active/Hidden
+            controls franchise availability.
           </p>
         </div>
         <Button
@@ -249,13 +251,13 @@ export function ProductDetailPage() {
                   {row.franchise_name ?? row.franchise_id}
                 </div>
                 <div className="text-[11px] text-[#8A8A84]">
-                  Master {formatINR(row.master_price)} ·{' '}
+                  Master {formatINR(row.master_price)} · Reference only ·{' '}
                   {row.available_for_pos ? 'Available for POS' : 'Not available for POS'}
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[.05em] text-[#8A8A84]">
-                  Selling price
+                  Franchise Selling Price
                 </div>
                 <div className="font-serif text-base font-bold text-[#1A7A4A]">
                   {formatINR(row.selling_price)}
@@ -304,13 +306,17 @@ export function ProductDetailPage() {
               </option>
             ))}
           </SelectField>
+          <p className="mb-0.5 text-sm text-[#5C5C56]">
+            Master Price {formatINR(product.price)}
+          </p>
+          <p className="mb-3 text-[11px] text-[#8A8A84]">Master Price is for reference only.</p>
           <Field
             label="Franchise Selling Price (₹)"
             type="number"
             min={0.01}
             step="0.01"
             value={sellingPrice}
-            error={sellingPrice ? sellingPriceError(sellingPrice, product.price) ?? undefined : undefined}
+            error={sellingPrice ? sellingPriceError(sellingPrice) ?? undefined : undefined}
             onChange={(e) => setSellingPrice(e.target.value)}
           />
           <label className="mb-3 flex items-center gap-2 text-sm text-[#4A4A46]">
@@ -322,8 +328,7 @@ export function ProductDetailPage() {
             Assignment Active (uncheck to hide from this franchise POS)
           </label>
           <p className="mb-3 text-[11px] text-[#8A8A84]">
-            Master price for this item: {formatINR(product.price)}. Selling price must be greater
-            than 0 and must not exceed the master price.
+            Set the selling price for this franchise.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="muted" onClick={() => setShowAssign(false)}>
@@ -332,7 +337,7 @@ export function ProductDetailPage() {
             <Button
               disabled={
                 !franchiseId ||
-                Boolean(sellingPriceError(sellingPrice, product.price)) ||
+                Boolean(sellingPriceError(sellingPrice)) ||
                 assignMutation.isPending
               }
               onClick={() => assignMutation.mutate()}
@@ -345,20 +350,24 @@ export function ProductDetailPage() {
 
       {editAssignment ? (
         <Modal title="Edit franchise selling price" onClose={() => setEditAssignment(null)}>
-          <p className="mb-3 text-sm text-[#5C5C56]">
-            {editAssignment.franchise_name} · Master {formatINR(product.price)}
+          <p className="mb-0.5 text-sm font-medium text-[#1A1A18]">
+            {editAssignment.franchise_name}
           </p>
+          <p className="mb-0.5 text-sm text-[#5C5C56]">
+            Master Price {formatINR(product.price)}
+          </p>
+          <p className="mb-3 text-[11px] text-[#8A8A84]">Master Price is for reference only.</p>
           <Field
             label="Franchise Selling Price (₹)"
             type="number"
             min={0.01}
             step="0.01"
             value={editPrice}
-            error={sellingPriceError(editPrice, product.price) ?? undefined}
+            error={sellingPriceError(editPrice) ?? undefined}
             onChange={(e) => setEditPrice(e.target.value)}
           />
           <p className="mb-3 text-[11px] text-[#8A8A84]">
-            Must be greater than 0 and must not exceed the master price.
+            Set the selling price for this franchise.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="muted" onClick={() => setEditAssignment(null)}>
@@ -366,7 +375,7 @@ export function ProductDetailPage() {
             </Button>
             <Button
               disabled={
-                Boolean(sellingPriceError(editPrice, product.price)) ||
+                Boolean(sellingPriceError(editPrice)) ||
                 updateAssignmentMutation.isPending
               }
               onClick={() =>

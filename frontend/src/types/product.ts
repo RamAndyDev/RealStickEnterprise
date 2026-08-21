@@ -73,10 +73,7 @@ export type OwnerMenuUpdatePayload = {
   selling_price: number;
 };
 
-export function sellingPriceError(
-  value: string,
-  masterPrice: number | null | undefined,
-): string | null {
+export function sellingPriceError(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return 'Franchise selling price is required.';
   if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
@@ -85,9 +82,6 @@ export function sellingPriceError(
   const amount = Number(trimmed);
   if (Number.isNaN(amount) || amount <= 0) {
     return 'Selling price must be greater than 0.';
-  }
-  if (masterPrice != null && amount > masterPrice) {
-    return 'Selling price must not exceed the master price.';
   }
   return null;
 }

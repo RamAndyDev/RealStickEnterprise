@@ -604,36 +604,12 @@ class FakeDatabase:
 
     def enforce_selling_price(self, row: dict) -> None:
         selling = row.get('selling_price')
-        if selling is None:
-            return
-        if float(selling) <= 0:
+        if selling is None or float(selling) <= 0:
             raise Exception('Selling price must be greater than 0')
-        product = next(
-            (
-                item
-                for item in self.tables.get('products', [])
-                if str(item.get('id')) == str(row.get('product_id'))
-            ),
-            None,
-        )
-        if product is None:
-            raise Exception('Product not found')
-        if float(selling) > float(product['price']):
-            raise Exception('Selling price must not exceed the master price')
 
     def enforce_master_price(self, product_row: dict) -> None:
-        master = product_row.get('price')
-        if master is None:
-            return
-        for assignment in self.tables.get('franchise_product_prices', []):
-            if str(assignment.get('product_id')) != str(product_row.get('id')):
-                continue
-            if not assignment.get('is_active'):
-                continue
-            if float(assignment.get('selling_price') or 0) > float(master):
-                raise Exception(
-                    'Master price cannot be reduced below existing franchise selling prices.'
-                )
+        # Master price is independent of franchise selling prices.
+        return
 
     def enforce_profile_rules(
         self,

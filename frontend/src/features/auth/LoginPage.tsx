@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 
+import { RealStickLogo } from '../../components/branding/RealStickLogo';
+import { documentTitleForRole } from '../../components/seo/documentTitle';
+import { useDocumentMeta } from '../../components/seo/useDocumentMeta';
 import { useAuth } from './AuthProvider';
 import { toLoginErrorMessage } from './loginError';
 import { staffLandingPath } from './nav';
-import { documentTitleForRole } from '../../components/seo/documentTitle';
-import { useDocumentMeta } from '../../components/seo/useDocumentMeta';
 
 export function LoginPage() {
   const { signIn, session, profile, loading } = useAuth();
@@ -38,9 +39,11 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0D4F2E] p-5">
       <div className="w-full max-w-md">
-        <div className="mb-8 text-center text-white">
-          <div className="font-serif text-5xl font-bold">RealStick™</div>
-          <div className="mt-2 text-xs uppercase tracking-[.2em] text-white/45">
+        <div className="mb-8 flex flex-col items-center text-center text-white">
+          <div className="rounded-2xl bg-white px-6 py-4 shadow-lg">
+            <RealStickLogo className="h-24 w-auto sm:h-28" />
+          </div>
+          <div className="mt-4 text-xs uppercase tracking-[.2em] text-white/45">
             Billing & Management System
           </div>
         </div>

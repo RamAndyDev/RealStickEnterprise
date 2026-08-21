@@ -124,11 +124,7 @@ describe('reports page custom date range UI', () => {
     assert.equal(reportsApi.includes("api.get<ReportSummary>('/reports/summary'"), true);
   });
 
-  it('does not add Observation #14 report generation', () => {
-    assert.equal(reportsPage.includes('Generate Report'), false);
-    assert.equal(reportsPage.includes('PDF'), false);
-    assert.equal(reportsPage.includes('Excel'), false);
-    assert.equal(reportsPage.toLowerCase().includes('xlsx'), false);
+  it('does not add Custom Date Range to Daily Sales', () => {
     assert.equal(dailySales.includes('Custom Date Range'), false);
   });
 });

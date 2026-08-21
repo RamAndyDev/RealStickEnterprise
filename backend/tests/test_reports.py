@@ -22,6 +22,7 @@ REPORT_ENDPOINTS = (
     '/api/v1/reports/daily',
     '/api/v1/reports/products',
     '/api/v1/reports/payments',
+    '/api/v1/reports/export',
     '/api/v1/reports/dashboard/admin',
     '/api/v1/reports/dashboard/owner',
 )

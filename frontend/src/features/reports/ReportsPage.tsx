@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { EmptyState, ErrorBanner, Field, LoadingBlock, StatCard } from '../../components/ui';
+import { Button, EmptyState, ErrorBanner, Field, LoadingBlock, StatCard, SuccessBanner } from '../../components/ui';
 import {
+  exportSalesReport,
   fetchDailyRevenue,
   fetchPaymentTotals,
   fetchProductSales,
@@ -17,15 +18,23 @@ import {
   customRangeValidationError,
   shouldFetchReports,
 } from './reportDateRange';
+import {
+  REPORT_EXPORT_SUCCESS,
+  toReportExportError,
+} from './reportExport';
 import { DailyRevenueChart } from './DailyRevenueChart';
 
 export function ReportsPage() {
   const [period, setPeriod] = useState<ReportPeriod>('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
 
   const rangeError = customRangeValidationError(period, customFrom, customTo);
   const canFetch = shouldFetchReports(period, customFrom, customTo);
+  const canGenerate = canFetch;
 
   const rangeKey = period === 'custom' ? [customFrom, customTo] : [];
   const summaryQuery = useQuery({
@@ -60,6 +69,21 @@ export function ReportsPage() {
   const payments = paymentsQuery.data?.items ?? [];
   const recentBills = summary?.recent_bills ?? [];
 
+  async function handleGenerate() {
+    if (!canGenerate || generating) return;
+    setGenerating(true);
+    setExportError(null);
+    setExportSuccess(null);
+    try {
+      await exportSalesReport(period, customFrom, customTo);
+      setExportSuccess(REPORT_EXPORT_SUCCESS);
+    } catch (err) {
+      setExportError(await toReportExportError(err));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[860px]">
       <div className="mb-3.5 flex items-center justify-between gap-3">
@@ -67,17 +91,22 @@ export function ReportsPage() {
           <h1 className="font-serif text-xl font-bold text-[#1A1A18]">Sales Reports</h1>
           <p className="text-xs text-[#8A8A84]">Performance overview</p>
         </div>
-        <select
-          aria-label="Report period"
-          value={period}
-          onChange={(event) => setPeriod(event.target.value as ReportPeriod)}
-          className="rounded-[7px] border border-[#E0DDD5] bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[#1A7A4A]"
-        >
-          <option value="today">Today</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-          <option value="custom">Custom Date Range</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Report period"
+            value={period}
+            onChange={(event) => setPeriod(event.target.value as ReportPeriod)}
+            className="rounded-[7px] border border-[#E0DDD5] bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[#1A7A4A]"
+          >
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="custom">Custom Date Range</option>
+          </select>
+          <Button size="sm" onClick={() => void handleGenerate()} disabled={!canGenerate || generating}>
+            {generating ? 'Generating...' : 'Generate Report'}
+          </Button>
+        </div>
       </div>
 
       {period === 'custom' ? (
@@ -105,6 +134,17 @@ export function ReportsPage() {
         <p className="mb-3.5 text-xs text-red-600" role="alert">
           {rangeError}
         </p>
+      ) : null}
+
+      {exportSuccess ? (
+        <div className="mb-3.5">
+          <SuccessBanner message={exportSuccess} />
+        </div>
+      ) : null}
+      {exportError ? (
+        <div className="mb-3.5">
+          <ErrorBanner message={exportError} />
+        </div>
       ) : null}
 
       {loading ? <LoadingBlock label="Loading reports…" /> : null}

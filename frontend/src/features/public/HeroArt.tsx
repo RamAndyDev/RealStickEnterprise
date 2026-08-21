@@ -1,21 +1,15 @@
+import { RealStickLogo } from '../../components/branding/RealStickLogo';
+
 /** Official RealStick brand mark for the public hero. Not a generated product photograph. */
 export function BrandHero() {
   return (
-    <div className="relative mx-auto w-full max-w-[520px]">
-      <img
-        src="/brand/realstick-brand.svg"
-        alt="RealStick — Real Fruits. Real Goodness."
-        width={800}
-        height={800}
-        className="h-auto w-full object-contain"
-        decoding="async"
-        fetchPriority="high"
-      />
+    <div className="relative mx-auto w-full max-w-[360px] sm:max-w-[420px]">
+      <RealStickLogo className="h-auto w-full" />
     </div>
   );
 }
 
-/** Decorative fruit-popsicle composition kept for non-hero uses. */
+/** Official RealStick brand mark for the public hero. */
 export function HeroArt() {
   return <BrandHero />;
 }

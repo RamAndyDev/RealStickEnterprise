@@ -10,7 +10,11 @@ from app.modules.reports.dates import start_of_day_utc, start_of_next_day_utc
 ORDER_COLUMNS = (
     'id, franchise_id, bill_number, status, total_amount, payment_method, completed_at, created_at'
 )
-ITEM_COLUMNS = 'order_id, product_name_snapshot, quantity, unit_price, line_total'
+ITEM_COLUMNS = (
+    'id, order_id, product_id, product_name_snapshot, quantity, unit_price, line_total, created_at'
+)
+PRODUCT_LOOKUP_COLUMNS = 'id, category_id, name'
+CATEGORY_LOOKUP_COLUMNS = 'id, name'
 FRANCHISE_COLUMNS = 'id, name, status, is_archived, city, tier'
 PAGE_SIZE = 1000
 
@@ -56,6 +60,23 @@ class ReportsRepository:
                 .in_('order_id', batch)
                 .execute()
             )
+            rows.extend(list(response.data or []))
+        return rows
+
+    def list_products_by_ids(self, product_ids: list[str]) -> list[dict[str, Any]]:
+        return self._select_by_ids('products', PRODUCT_LOOKUP_COLUMNS, product_ids)
+
+    def list_categories_by_ids(self, category_ids: list[str]) -> list[dict[str, Any]]:
+        return self._select_by_ids('product_categories', CATEGORY_LOOKUP_COLUMNS, category_ids)
+
+    def _select_by_ids(self, table: str, columns: str, ids: list[str]) -> list[dict[str, Any]]:
+        unique = [value for value in dict.fromkeys(ids) if value]
+        if not unique:
+            return []
+        rows: list[dict[str, Any]] = []
+        for offset in range(0, len(unique), PAGE_SIZE):
+            batch = unique[offset : offset + PAGE_SIZE]
+            response = self._db.table(table).select(columns).in_('id', batch).execute()
             rows.extend(list(response.data or []))
         return rows
 

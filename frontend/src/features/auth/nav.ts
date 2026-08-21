@@ -6,6 +6,13 @@ export type NavItem = {
   roles: UserRole[];
 };
 
+/**
+ * Franchise Operational Audit visibility.
+ * Changing this list controls whether the Audit nav item is shown.
+ * Keep backend /audits authorization in sync if this list changes.
+ */
+export const AUDIT_ACCESS_ROLES: UserRole[] = ['SYSTEM_ADMIN', 'FRANCHISE_OWNER'];
+
 /** Role-aware staff navigation. Out-of-scope modules are omitted (inventory, recipes, applications). */
 export const APP_NAV: NavItem[] = [
   {
@@ -71,7 +78,7 @@ export const APP_NAV: NavItem[] = [
   {
     label: 'Audit',
     path: '/audit',
-    roles: ['SYSTEM_ADMIN', 'FRANCHISE_OWNER'],
+    roles: AUDIT_ACCESS_ROLES,
   },
   {
     label: 'Profile',

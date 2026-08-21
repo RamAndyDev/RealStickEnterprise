@@ -1,5 +1,10 @@
 import { api } from './api';
 import { reportRequestParams } from '../features/reports/reportDateRange';
+import {
+  filenameFromContentDisposition,
+  salesReportDownloadName,
+  triggerBrowserDownload,
+} from '../features/reports/reportExport';
 import type {
   AdminDashboard,
   DailyRevenueResponse,
@@ -53,6 +58,21 @@ export async function fetchPaymentTotals(
     params: reportRequestParams(period, startDate, endDate),
   });
   return data;
+}
+
+export async function exportSalesReport(
+  period: ReportPeriod,
+  startDate = '',
+  endDate = '',
+): Promise<void> {
+  const response = await api.get<Blob>('/reports/export', {
+    params: reportRequestParams(period, startDate, endDate),
+    responseType: 'blob',
+  });
+  const filename =
+    filenameFromContentDisposition(response.headers['content-disposition']) ??
+    salesReportDownloadName(period, startDate, endDate);
+  triggerBrowserDownload(response.data, filename);
 }
 
 export async function fetchAdminDashboard(): Promise<AdminDashboard> {

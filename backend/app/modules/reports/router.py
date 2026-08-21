@@ -4,11 +4,13 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 
 from app.core.roles import UserRole
 from app.core.security import CurrentProfile, require_role
 from app.modules.reports.dates import ReportPeriod
+from app.modules.reports.pdf import content_disposition
 from app.modules.reports.schemas import (
     AdminDashboard,
     DailyRevenueResponse,
@@ -104,6 +106,37 @@ def get_payment_totals(
         franchise_id,
         start_date=start_date,
         end_date=end_date,
+    )
+
+
+@router.get('/export')
+def export_sales_report(
+    profile: ReportsUser,
+    period: ReportPeriod = Query(default=ReportPeriod.LAST_7_DAYS),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    franchise_id: UUID | None = Query(default=None),
+    service: ReportsService = Depends(get_reports_service),
+) -> Response:
+    try:
+        content, filename = service.export_pdf(
+            profile,
+            period,
+            franchise_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Unable to generate report.',
+        ) from exc
+    return Response(
+        content=content,
+        media_type='application/pdf',
+        headers={'Content-Disposition': content_disposition(filename)},
     )
 
 

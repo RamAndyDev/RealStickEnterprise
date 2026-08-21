@@ -216,7 +216,7 @@ export function FranchiseDetailPage() {
       </section>
 
       <section className="mb-8">
-        <FranchiseProductsPanel franchiseId={franchise.id} />
+        <FranchiseProductsPanel franchiseId={franchise.id} franchiseName={franchise.name} />
       </section>
 
       <div className="mb-10">

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -11,11 +11,9 @@ import {
   Field,
   LoadingBlock,
   Modal,
-  SelectField,
   SuccessBanner,
 } from '../../components/ui';
 import {
-  assignFranchiseProduct,
   listFranchiseProducts,
   listProducts,
   updateFranchiseProduct,
@@ -24,19 +22,26 @@ import {
   formatINR,
   sellingPriceError,
   type FranchiseProductAssignment,
+  type Product,
 } from '../../types/product';
 import { apiErrorMessage } from '../franchises/status';
+import { AssignProductsDialog } from './AssignProductsDialog';
 import { categoryColor } from './categoryColors';
 import { ProductImage } from './ProductImage';
 
-export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string }) {
+const EMPTY_PRODUCTS: Product[] = [];
+
+export function FranchiseProductsPanel({
+  franchiseId,
+  franchiseName,
+}: {
+  franchiseId: string;
+  franchiseName?: string;
+}) {
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAssign, setShowAssign] = useState(false);
-  const [productId, setProductId] = useState('');
-  const [sellingPrice, setSellingPrice] = useState('');
-  const [assignActive, setAssignActive] = useState(true);
   const [editRow, setEditRow] = useState<FranchiseProductAssignment | null>(null);
   const [editPrice, setEditPrice] = useState('');
 
@@ -48,35 +53,6 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
   const productsQuery = useQuery({
     queryKey: ['admin-products'],
     queryFn: () => listProducts({}),
-  });
-
-  const assignedIds = useMemo(
-    () => new Set((assignmentsQuery.data?.items ?? []).map((a) => a.product_id)),
-    [assignmentsQuery.data],
-  );
-
-  const unassignedProducts = (productsQuery.data?.items ?? []).filter(
-    (p) => !assignedIds.has(p.id),
-  );
-  const selectedMaster = unassignedProducts.find((p) => p.id === productId)?.price;
-
-  const assignMutation = useMutation({
-    mutationFn: () =>
-      assignFranchiseProduct(franchiseId, {
-        product_id: productId,
-        selling_price: Number(sellingPrice),
-        is_active: assignActive,
-      }),
-    onSuccess: async () => {
-      setShowAssign(false);
-      setProductId('');
-      setSellingPrice('');
-      setAssignActive(true);
-      setFeedback('Product assigned.');
-      setError(null);
-      await queryClient.invalidateQueries({ queryKey: ['admin-franchise-products', franchiseId] });
-    },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to assign product.')),
   });
 
   const updateMutation = useMutation({
@@ -121,12 +97,8 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
             {items.length} assigned · selling price is franchise-specific
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setShowAssign(true)}
-          disabled={!unassignedProducts.length}
-        >
-          + Assign product
+        <Button size="sm" onClick={() => setShowAssign(true)}>
+          Assign products
         </Button>
       </div>
 
@@ -214,61 +186,27 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
       )}
 
       {showAssign ? (
-        <Modal title="Assign product" onClose={() => setShowAssign(false)}>
-          <SelectField
-            label="Product"
-            value={productId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setProductId(id);
-              const product = unassignedProducts.find((p) => p.id === id);
-              if (product) setSellingPrice('');
-            }}
-          >
-            <option value="">Select product</option>
-            {unassignedProducts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} · master {formatINR(p.price)}
-              </option>
-            ))}
-          </SelectField>
-          <Field
-            label="Franchise Selling Price (₹)"
-            type="number"
-            min={0.01}
-            step="0.01"
-            value={sellingPrice}
-            error={sellingPrice ? sellingPriceError(sellingPrice, selectedMaster) ?? undefined : undefined}
-            onChange={(e) => setSellingPrice(e.target.value)}
-          />
-          <label className="mb-3 flex items-center gap-2 text-sm text-[#4A4A46]">
-            <input
-              type="checkbox"
-              checked={assignActive}
-              onChange={(event) => setAssignActive(event.target.checked)}
-            />
-            Assignment Active (uncheck to hide from this franchise POS)
-          </label>
-          <p className="mb-3 text-[11px] text-[#8A8A84]">
-            Must be greater than 0 and strictly less than the master price
-            {selectedMaster != null ? ` (${formatINR(selectedMaster)})` : ''}.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="muted" onClick={() => setShowAssign(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={
-                !productId ||
-                Boolean(sellingPriceError(sellingPrice, selectedMaster)) ||
-                assignMutation.isPending
-              }
-              onClick={() => assignMutation.mutate()}
-            >
-              {assignMutation.isPending ? 'Saving…' : 'Assign'}
-            </Button>
-          </div>
-        </Modal>
+        <AssignProductsDialog
+          franchiseId={franchiseId}
+          franchiseName={franchiseName}
+          products={productsQuery.data?.items ?? EMPTY_PRODUCTS}
+          assignments={items}
+          loading={productsQuery.isLoading}
+          loadError={
+            productsQuery.isError
+              ? apiErrorMessage(productsQuery.error, 'Unable to load products.')
+              : null
+          }
+          onClose={() => setShowAssign(false)}
+          onSaved={async () => {
+            setShowAssign(false);
+            setFeedback('Product assignments saved.');
+            setError(null);
+            await queryClient.invalidateQueries({
+              queryKey: ['admin-franchise-products', franchiseId],
+            });
+          }}
+        />
       ) : null}
 
       {editRow ? (

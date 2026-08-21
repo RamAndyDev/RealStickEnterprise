@@ -1,4 +1,10 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import {
+  useEffect,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+} from 'react';
 
 import {
   ACTION_FIT_CLASS,
@@ -200,37 +206,69 @@ export function Badge({
 
 export function Modal({
   title,
+  subtitle,
+  toolbar,
+  footer,
   children,
   onClose,
   wide = false,
+  size,
 }: {
   title: string;
+  subtitle?: ReactNode;
+  toolbar?: ReactNode;
+  footer?: ReactNode;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  size?: 'md' | 'lg';
 }) {
+  const structured = Boolean(toolbar || footer);
+  const widthClass =
+    size === 'lg' ? 'max-w-[720px]' : wide ? 'max-w-[660px]' : 'max-w-[420px]';
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby="modal-title"
         aria-label={title}
-        className={`max-h-[90vh] w-full overflow-auto rounded-2xl bg-white shadow-[0_8px_40px_rgba(0,0,0,.25)] ${
-          wide ? 'max-w-[660px]' : 'max-w-[420px]'
-        }`}
+        className={`flex max-h-[90vh] w-full flex-col rounded-2xl bg-white shadow-[0_8px_40px_rgba(0,0,0,.25)] ${
+          structured ? 'overflow-hidden' : 'overflow-auto'
+        } ${widthClass}`}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E0DDD5] bg-white px-5 py-4">
-          <h2 className="text-[15px] font-bold text-[#1A1A18]">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[22px] leading-none text-[#8A8A84] hover:text-[#1A1A18]"
-            aria-label="Close"
-          >
-            ×
-          </button>
+        <div className="sticky top-0 z-10 shrink-0 border-b border-[#E0DDD5] bg-white px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id="modal-title" className="text-[15px] font-bold text-[#1A1A18]">
+                {title}
+              </h2>
+              {subtitle ? <div className="mt-1 text-xs text-[#8A8A84]">{subtitle}</div> : null}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-[22px] leading-none text-[#8A8A84] hover:text-[#1A1A18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A7A4A]"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        {toolbar ? <div className="shrink-0 border-b border-[#E0DDD5] bg-white px-5 py-3">{toolbar}</div> : null}
+        <div className={`px-5 py-4 ${structured ? 'min-h-0 flex-1 overflow-y-auto' : ''}`}>{children}</div>
+        {footer ? (
+          <div className="shrink-0 border-t border-[#E0DDD5] bg-white px-5 py-3">{footer}</div>
+        ) : null}
       </div>
     </div>
   );

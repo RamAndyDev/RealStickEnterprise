@@ -1,8 +1,28 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
+import {
+  ACTION_FIT_CLASS,
+  ACTION_GROUP_ALIGN,
+  ACTION_GROUP_CLASS,
+  ACTION_SELECT_CLASS,
+  ACTIONS_TD_CLASS,
+  ACTIONS_TH_CLASS,
+  type ActionFit,
+} from './actionFit';
+
+export type { ActionFit } from './actionFit';
+export {
+  ACTION_FIT_CLASS,
+  ACTION_GROUP_CLASS,
+  ACTION_SELECT_CLASS,
+  ACTIONS_TD_CLASS,
+  ACTIONS_TH_CLASS,
+} from './actionFit';
+
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'outline' | 'danger' | 'muted' | 'onDark';
   size?: 'sm' | 'md';
+  fit?: ActionFit;
 };
 
 export function Button({
@@ -10,12 +30,17 @@ export function Button({
   className = '',
   variant = 'primary',
   size = 'md',
+  fit,
   type = 'button',
   ...props
 }: BtnProps) {
   const base =
     'inline-flex items-center justify-center rounded-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-60';
-  const sizes = size === 'sm' ? 'px-3.5 py-1.5 text-[13px]' : 'px-5 py-2.5 text-sm';
+  const sizes = fit
+    ? ACTION_FIT_CLASS[fit]
+    : size === 'sm'
+      ? 'px-3.5 py-1.5 text-[13px]'
+      : 'px-5 py-2.5 text-sm';
   const variants = {
     primary: 'bg-[#1A7A4A] text-white hover:bg-[#16693f]',
     outline: 'border-2 border-[#1A7A4A] bg-transparent text-[#1A7A4A] hover:bg-[#E6F4EC]',
@@ -30,6 +55,72 @@ export function Button({
       {children}
     </button>
   );
+}
+
+type ActionButtonBase = Omit<BtnProps, 'size' | 'fit'> & {
+  fit?: Exclude<ActionFit, 'icon'>;
+};
+
+type IconActionButton = Omit<BtnProps, 'size' | 'fit'> & {
+  fit: 'icon';
+  'aria-label': string;
+};
+
+export type ActionButtonProps = ActionButtonBase | IconActionButton;
+
+export function ActionButton({ fit = 'sm', className = '', title, ...props }: ActionButtonProps) {
+  const accessible = 'aria-label' in props ? props['aria-label'] : undefined;
+  return (
+    <Button size="sm" fit={fit} className={className} title={title ?? accessible} {...props} />
+  );
+}
+
+export function ActionGroup({
+  children,
+  align = 'start',
+  className = '',
+}: {
+  children: ReactNode;
+  align?: 'start' | 'end';
+  className?: string;
+}) {
+  return (
+    <div className={`${ACTION_GROUP_CLASS} ${ACTION_GROUP_ALIGN[align]} ${className}`.trim()}>
+      {children}
+    </div>
+  );
+}
+
+export function ActionsTh({
+  children = 'Actions',
+  align = 'start',
+}: {
+  children?: ReactNode;
+  align?: 'start' | 'end';
+}) {
+  return (
+    <th className={`${ACTIONS_TH_CLASS} ${align === 'end' ? 'text-right' : 'text-left'}`}>
+      {children}
+    </th>
+  );
+}
+
+export function ActionsTd({
+  children,
+  align = 'start',
+}: {
+  children: ReactNode;
+  align?: 'start' | 'end';
+}) {
+  return (
+    <td className={`${ACTIONS_TD_CLASS} ${align === 'end' ? 'text-right' : 'text-left'}`}>
+      <ActionGroup align={align}>{children}</ActionGroup>
+    </td>
+  );
+}
+
+export function ActionSelect({ className = '', ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={`${ACTION_SELECT_CLASS} ${className}`} {...props} />;
 }
 
 type FieldProps = InputHTMLAttributes<HTMLInputElement> & {

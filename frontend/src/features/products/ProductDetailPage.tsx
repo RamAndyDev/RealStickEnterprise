@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import {
+  ActionButton,
+  ActionGroup,
   Badge,
   Button,
   EmptyState,
@@ -193,14 +195,14 @@ export function ProductDetailPage() {
             <div className="font-serif text-2xl font-bold text-[#1A7A4A]">
               {formatINR(product.price)}
             </div>
-            <Button
-              size="sm"
+            <ActionButton
+              fit="lg"
               variant="outline"
               className="mt-2"
               onClick={() => toggleProductMutation.mutate(!product.is_active)}
             >
               {product.is_active ? 'Set Hidden' : 'Set Active'}
-            </Button>
+            </ActionButton>
           </div>
         </div>
       </div>
@@ -259,32 +261,30 @@ export function ProductDetailPage() {
                   {formatINR(row.selling_price)}
                 </div>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setEditAssignment(row);
-                  setEditPrice(String(row.selling_price));
-                }}
-              >
-                Edit price
-              </Button>
-              <button
-                type="button"
-                onClick={() =>
-                  updateAssignmentMutation.mutate({
-                    franchise_id: row.franchise_id,
-                    is_active: !row.is_active,
-                  })
-                }
-                className="rounded-md border border-[#E0DDD5] px-2.5 py-1 text-[11px] font-semibold"
-                style={{
-                  background: row.is_active ? '#E6F4EC' : '#FDFAF4',
-                  color: row.is_active ? '#1A7A4A' : '#8A8A84',
-                }}
-              >
-                {row.is_active ? 'Assignment Active' : 'Assignment Hidden'}
-              </button>
+              <ActionGroup>
+                <ActionButton
+                  fit="lg"
+                  variant="outline"
+                  onClick={() => {
+                    setEditAssignment(row);
+                    setEditPrice(String(row.selling_price));
+                  }}
+                >
+                  Edit price
+                </ActionButton>
+                <ActionButton
+                  fit="xl"
+                  variant={row.is_active ? 'outline' : 'muted'}
+                  onClick={() =>
+                    updateAssignmentMutation.mutate({
+                      franchise_id: row.franchise_id,
+                      is_active: !row.is_active,
+                    })
+                  }
+                >
+                  {row.is_active ? 'Assignment Active' : 'Assignment Hidden'}
+                </ActionButton>
+              </ActionGroup>
             </div>
           ))}
         </div>

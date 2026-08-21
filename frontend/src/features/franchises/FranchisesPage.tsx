@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
+  ActionButton,
+  ActionSelect,
+  ActionsTd,
+  ActionsTh,
   Badge,
   Button,
   EmptyState,
@@ -229,7 +233,7 @@ export function FranchisesPage() {
                 <th className="px-4 py-3 font-semibold">Payment</th>
                 <th className="px-4 py-3 font-semibold">Launch</th>
                 <th className="px-4 py-3 font-semibold">Open</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
+                <ActionsTh />
               </tr>
             </thead>
             <tbody>
@@ -266,39 +270,36 @@ export function FranchisesPage() {
                       : '—'}
                   </td>
                   <td className="px-4 py-3">{formatDate(item.open_date)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/franchises/${item.id}`)}>
-                        View
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditTarget(item)}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => resetOwnerForm(item)}
-                      >
-                        Owner
-                      </Button>
-                      <select
-                        className="rounded-lg border border-[#E0DDD5] px-2 py-1 text-xs"
-                        value=""
-                        onChange={(e) => {
-                          const next = e.target.value as FranchiseStatus;
-                          if (!next) return;
-                          setStatusTarget({ franchise: item, next });
-                        }}
-                      >
-                        <option value="">Status…</option>
-                        {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
-                          <option key={status} value={status}>
-                            {statusLabel(status)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </td>
+                  <ActionsTd>
+                    <ActionButton
+                      variant="outline"
+                      onClick={() => navigate(`/franchises/${item.id}`)}
+                    >
+                      View
+                    </ActionButton>
+                    <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
+                      Edit
+                    </ActionButton>
+                    <ActionButton variant="outline" onClick={() => resetOwnerForm(item)}>
+                      Owner
+                    </ActionButton>
+                    <ActionSelect
+                      value=""
+                      aria-label={`Change status for ${item.name}`}
+                      onChange={(e) => {
+                        const next = e.target.value as FranchiseStatus;
+                        if (!next) return;
+                        setStatusTarget({ franchise: item, next });
+                      }}
+                    >
+                      <option value="">Status…</option>
+                      {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
+                        <option key={status} value={status}>
+                          {statusLabel(status)}
+                        </option>
+                      ))}
+                    </ActionSelect>
+                  </ActionsTd>
                 </tr>
               ))}
             </tbody>

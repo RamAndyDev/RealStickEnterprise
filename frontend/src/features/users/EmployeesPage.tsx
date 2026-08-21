@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import {
+  ActionButton,
+  ActionsTd,
+  ActionsTh,
   Badge,
   Button,
   EmptyState,
@@ -164,7 +167,7 @@ export function EmployeesPage() {
                 <th className="px-4 py-3 font-semibold">User ID</th>
                 <th className="px-4 py-3 font-semibold">Name</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
+                <ActionsTh />
               </tr>
             </thead>
             <tbody>
@@ -179,22 +182,24 @@ export function EmployeesPage() {
                       {item.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setViewTarget(item)}>
-                        View
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditTarget(item)}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setStatusTarget(item)}>
-                        {item.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                      <Button size="sm" variant="muted" onClick={() => setResetTarget(item)}>
-                        Reset Password
-                      </Button>
-                    </div>
-                  </td>
+                  <ActionsTd>
+                    <ActionButton variant="outline" onClick={() => setViewTarget(item)}>
+                      View
+                    </ActionButton>
+                    <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
+                      Edit
+                    </ActionButton>
+                    <ActionButton
+                      fit="status"
+                      variant="outline"
+                      onClick={() => setStatusTarget(item)}
+                    >
+                      {item.is_active ? 'Deactivate' : 'Activate'}
+                    </ActionButton>
+                    <ActionButton fit="lg" variant="muted" onClick={() => setResetTarget(item)}>
+                      Reset Password
+                    </ActionButton>
+                  </ActionsTd>
                 </tr>
               ))}
             </tbody>

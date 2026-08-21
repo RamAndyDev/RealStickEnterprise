@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import {
+  ActionButton,
+  ActionsTd,
+  ActionsTh,
   Badge,
   Button,
   EmptyState,
@@ -149,7 +152,7 @@ export function PromotionsPage() {
                 <th className="px-4 py-3 font-semibold">Franchises</th>
                 <th className="px-4 py-3 font-semibold">Validity</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
+                <ActionsTh />
               </tr>
             </thead>
             <tbody>
@@ -175,41 +178,38 @@ export function PromotionsPage() {
                       {item.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setForm({
-                            name: item.name,
-                            description: item.description ?? '',
-                            promo_code: item.promo_code,
-                            valid_from: item.valid_from ? item.valid_from.slice(0, 10) : '',
-                            valid_to: item.valid_to ? item.valid_to.slice(0, 10) : '',
-                            is_active: item.is_active,
-                            franchise_ids: item.franchise_ids,
-                          });
-                          setEditTarget(item);
-                          setError(null);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={item.is_active ? 'muted' : 'outline'}
-                        onClick={() =>
-                          updateMutation.mutate({
-                            id: item.id,
-                            payload: { is_active: !item.is_active },
-                          })
-                        }
-                      >
-                        {item.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                    </div>
-                  </td>
+                  <ActionsTd>
+                    <ActionButton
+                      variant="outline"
+                      onClick={() => {
+                        setForm({
+                          name: item.name,
+                          description: item.description ?? '',
+                          promo_code: item.promo_code,
+                          valid_from: item.valid_from ? item.valid_from.slice(0, 10) : '',
+                          valid_to: item.valid_to ? item.valid_to.slice(0, 10) : '',
+                          is_active: item.is_active,
+                          franchise_ids: item.franchise_ids,
+                        });
+                        setEditTarget(item);
+                        setError(null);
+                      }}
+                    >
+                      Edit
+                    </ActionButton>
+                    <ActionButton
+                      fit="status"
+                      variant={item.is_active ? 'muted' : 'outline'}
+                      onClick={() =>
+                        updateMutation.mutate({
+                          id: item.id,
+                          payload: { is_active: !item.is_active },
+                        })
+                      }
+                    >
+                      {item.is_active ? 'Deactivate' : 'Activate'}
+                    </ActionButton>
+                  </ActionsTd>
                 </tr>
               ))}
             </tbody>

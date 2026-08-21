@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import {
+  ActionButton,
   Badge,
   Button,
   EmptyState,
@@ -226,9 +227,9 @@ export function OwnerMenuPage() {
                         <Badge tone="muted">Inactive</Badge>
                       )}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
+                    <div className="mt-3">
+                      <ActionButton
+                        fit="lg"
                         variant="outline"
                         disabled={!canEditPrice}
                         onClick={() => {
@@ -239,7 +240,7 @@ export function OwnerMenuPage() {
                         }}
                       >
                         Edit Price
-                      </Button>
+                      </ActionButton>
                     </div>
                   </div>
                 </article>

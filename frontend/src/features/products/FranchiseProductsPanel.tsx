@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
+  ActionButton,
+  ActionGroup,
   Button,
   EmptyState,
   ErrorBanner,
@@ -183,32 +185,29 @@ export function FranchiseProductsPanel({ franchiseId }: { franchiseId: string })
                   {formatINR(item.selling_price)}
                 </div>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setEditRow(item);
-                  setEditPrice(String(item.selling_price));
-                }}
-              >
-                Edit
-              </Button>
-              <button
-                type="button"
-                onClick={() =>
-                  updateMutation.mutate({
-                    product_id: item.product_id,
-                    is_active: !item.is_active,
-                  })
-                }
-                className="rounded-md border border-[#E0DDD5] px-2.5 py-1 text-[11px] font-semibold"
-                style={{
-                  background: item.is_active ? '#E6F4EC' : '#FDFAF4',
-                  color: item.is_active ? '#1A7A4A' : '#8A8A84',
-                }}
-              >
-                {item.is_active ? 'Assignment Active' : 'Assignment Hidden'}
-              </button>
+              <ActionGroup>
+                <ActionButton
+                  variant="outline"
+                  onClick={() => {
+                    setEditRow(item);
+                    setEditPrice(String(item.selling_price));
+                  }}
+                >
+                  Edit
+                </ActionButton>
+                <ActionButton
+                  fit="xl"
+                  variant={item.is_active ? 'outline' : 'muted'}
+                  onClick={() =>
+                    updateMutation.mutate({
+                      product_id: item.product_id,
+                      is_active: !item.is_active,
+                    })
+                  }
+                >
+                  {item.is_active ? 'Assignment Active' : 'Assignment Hidden'}
+                </ActionButton>
+              </ActionGroup>
             </div>
           ))}
         </div>

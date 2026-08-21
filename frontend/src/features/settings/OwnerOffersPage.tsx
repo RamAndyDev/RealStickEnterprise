@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import {
+  ActionButton,
+  ActionsTd,
+  ActionsTh,
   Badge,
   Button,
   EmptyState,
@@ -164,7 +167,7 @@ export function OffersPage() {
                 <th className="px-4 py-3 font-semibold">Promotion</th>
                 <th className="px-4 py-3 font-semibold">Validity</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
+                <ActionsTh />
               </tr>
             </thead>
             <tbody>
@@ -188,25 +191,23 @@ export function OffersPage() {
                       {offer.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(offer)}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={offer.is_active ? 'muted' : 'outline'}
-                        onClick={() =>
-                          updateMutation.mutate({
-                            id: offer.id,
-                            payload: { is_active: !offer.is_active },
-                          })
-                        }
-                      >
-                        {offer.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                    </div>
-                  </td>
+                  <ActionsTd>
+                    <ActionButton variant="outline" onClick={() => openEdit(offer)}>
+                      Edit
+                    </ActionButton>
+                    <ActionButton
+                      fit="status"
+                      variant={offer.is_active ? 'muted' : 'outline'}
+                      onClick={() =>
+                        updateMutation.mutate({
+                          id: offer.id,
+                          payload: { is_active: !offer.is_active },
+                        })
+                      }
+                    >
+                      {offer.is_active ? 'Deactivate' : 'Activate'}
+                    </ActionButton>
+                  </ActionsTd>
                 </tr>
               ))}
             </tbody>

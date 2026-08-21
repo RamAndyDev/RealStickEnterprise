@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 
-import { Button, Field, SelectField } from '../../components/ui';
+import { Button, ErrorBanner, Field, SelectField } from '../../components/ui';
 import type { UserRole } from '../../types/auth';
 import type { Franchise } from '../../types/franchise';
 import type { ManagedUser } from '../../types/user';
+import { validateOwnerForm, type OwnerCreateFieldErrors } from './ownerForm';
 
 export type UserFormValues = {
   full_name: string;
@@ -49,8 +50,11 @@ export function UserForm({
   franchiseLabel,
   submitting,
   employeeMode = false,
+  formError = null,
+  apiFieldErrors,
   onCancel,
   onSubmit,
+  onClearSubmitError,
 }: {
   mode: 'create' | 'edit';
   initial: UserFormValues;
@@ -58,27 +62,58 @@ export function UserForm({
   franchiseLabel?: string;
   submitting: boolean;
   employeeMode?: boolean;
+  formError?: string | null;
+  apiFieldErrors?: OwnerCreateFieldErrors;
   onCancel: () => void;
   onSubmit: (values: UserFormValues) => void;
+  onClearSubmitError?: () => void;
 }) {
   const [values, setValues] = useState(initial);
+  const [fieldErrors, setFieldErrors] = useState<OwnerCreateFieldErrors>({});
   const isSystemAdmin = values.role === 'SYSTEM_ADMIN';
   const showFranchiseSelect = !franchiseLabel && !isSystemAdmin;
   const showReadOnlyFranchise = Boolean(franchiseLabel);
   const passwordMismatch =
     employeeMode && mode === 'create' && values.password !== values.confirm_password;
+  const ownerCreateMode = mode === 'create' && !employeeMode;
 
   function update<K extends keyof UserFormValues>(key: K, value: UserFormValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
+    if (key === 'full_name') {
+      setFieldErrors((current) => (current.full_name ? { ...current, full_name: undefined } : current));
+    } else if (key === 'email') {
+      setFieldErrors((current) => (current.email ? { ...current, email: undefined } : current));
+    } else if (key === 'franchise_id' || key === 'role') {
+      setFieldErrors((current) =>
+        current.franchise_id ? { ...current, franchise_id: undefined } : current,
+      );
+    }
+    if (formError || apiFieldErrors?.full_name || apiFieldErrors?.email || apiFieldErrors?.franchise_id) {
+      onClearSubmitError?.();
+    }
   }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (ownerCreateMode) {
+      const errors = validateOwnerForm(values);
+      setFieldErrors(errors);
+      if (Object.keys(errors).length > 0) return;
+    }
     onSubmit(values);
   }
 
+  const emailError = fieldErrors.email || apiFieldErrors?.email;
+  const nameError = fieldErrors.full_name || apiFieldErrors?.full_name;
+  const franchiseError = fieldErrors.franchise_id || apiFieldErrors?.franchise_id;
+
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} noValidate={ownerCreateMode}>
+      {formError ? (
+        <div className="mb-3">
+          <ErrorBanner message={formError} />
+        </div>
+      ) : null}
       {employeeMode && mode === 'create' ? (
         <Field
           label="User ID"
@@ -92,6 +127,7 @@ export function UserForm({
         label="Name"
         required
         value={values.full_name}
+        error={nameError}
         onChange={(event) => update('full_name', event.target.value)}
       />
       {employeeMode && mode === 'edit' ? (
@@ -110,6 +146,7 @@ export function UserForm({
           required
           value={values.email}
           disabled={mode === 'edit'}
+          error={emailError}
           onChange={(event) => update('email', event.target.value)}
         />
       ) : null}
@@ -169,6 +206,7 @@ export function UserForm({
           label="Franchise"
           required
           value={values.franchise_id}
+          error={franchiseError}
           onChange={(event) => update('franchise_id', event.target.value)}
         >
           <option value="">Select franchise</option>
@@ -205,11 +243,12 @@ export function UserForm({
           type="submit"
           disabled={
             submitting ||
-            !values.full_name.trim() ||
-            (employeeMode && !values.login_id.trim()) ||
-            (employeeMode && mode === 'create' && (values.password.length < 8 || passwordMismatch)) ||
-            (!employeeMode && mode === 'create' && !values.email.trim()) ||
-            (showFranchiseSelect && !values.franchise_id)
+            (!ownerCreateMode &&
+              (!values.full_name.trim() ||
+                (employeeMode && !values.login_id.trim()) ||
+                (employeeMode && mode === 'create' && (values.password.length < 8 || passwordMismatch)) ||
+                (!employeeMode && mode === 'create' && !values.email.trim()) ||
+                (showFranchiseSelect && !values.franchise_id)))
           }
         >
           {submitting ? 'Saving…' : mode === 'create' ? 'Create' : 'Save'}

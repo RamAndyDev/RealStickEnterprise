@@ -24,6 +24,11 @@ import type { UserRole } from '../../types/auth';
 import type { ManagedUser } from '../../types/user';
 import { apiErrorMessage, formatDate } from '../franchises/status';
 import { roleLabel, roleTone } from './labels';
+import {
+  applyOwnerCreateResult,
+  classifyOwnerCreateError,
+  type OwnerCreateFieldErrors,
+} from './ownerForm';
 import { UserDetail } from './UserDetail';
 import { UserForm, emptyUserForm, userToForm, type UserFormValues } from './UserForm';
 
@@ -45,6 +50,8 @@ export function UsersPage() {
   const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createFieldErrors, setCreateFieldErrors] = useState<OwnerCreateFieldErrors>({});
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -75,12 +82,20 @@ export function UsersPage() {
         franchise_id: values.role === 'SYSTEM_ADMIN' ? null : values.franchise_id,
       }),
     onSuccess: async (data) => {
+      const result = applyOwnerCreateResult(true);
       setShowAdd(false);
+      setCreateError(result.error);
+      setCreateFieldErrors({});
       setFeedback(data.message);
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to create user.')),
+    onError: (err) => {
+      const classified = classifyOwnerCreateError(err);
+      const result = applyOwnerCreateResult(false, classified.formError);
+      setCreateError(result.error);
+      setCreateFieldErrors(classified.fieldErrors);
+    },
   });
 
   const updateMutation = useMutation({
@@ -138,7 +153,15 @@ export function UsersPage() {
             {listQuery.isLoading ? 'Loading…' : `${listQuery.data?.total ?? 0} users`}
           </p>
         </div>
-        <Button onClick={() => setShowAdd(true)}>+ Add User</Button>
+        <Button
+          onClick={() => {
+            setCreateError(null);
+            setCreateFieldErrors({});
+            setShowAdd(true);
+          }}
+        >
+          + Add User
+        </Button>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -170,7 +193,7 @@ export function UsersPage() {
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
-      {error ? (
+      {error && !showAdd ? (
         <div className="mb-3">
           <ErrorBanner message={error} />
         </div>
@@ -242,14 +265,35 @@ export function UsersPage() {
       ) : null}
 
       {showAdd ? (
-        <Modal title="Add User" onClose={() => setShowAdd(false)}>
+        <Modal
+          title="Add User"
+          onClose={() => {
+            setShowAdd(false);
+            setCreateError(null);
+            setCreateFieldErrors({});
+          }}
+        >
           <UserForm
             mode="create"
             initial={createInitial}
             franchises={franchises}
             submitting={createMutation.isPending}
-            onCancel={() => setShowAdd(false)}
-            onSubmit={(values) => createMutation.mutate(values)}
+            formError={createError}
+            apiFieldErrors={createFieldErrors}
+            onCancel={() => {
+              setShowAdd(false);
+              setCreateError(null);
+              setCreateFieldErrors({});
+            }}
+            onClearSubmitError={() => {
+              setCreateError(null);
+              setCreateFieldErrors({});
+            }}
+            onSubmit={(values) => {
+              setCreateError(null);
+              setCreateFieldErrors({});
+              createMutation.mutate(values);
+            }}
           />
         </Modal>
       ) : null}

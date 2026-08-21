@@ -39,6 +39,12 @@ import {
 import { LaunchProgressCompact, LaunchProgressDots } from './LaunchProgress';
 import { deriveLaunchProgress } from './launchStages';
 import { apiErrorMessage, formatDate, statusLabel, statusTone } from './status';
+import {
+  applyOwnerCreateResult,
+  classifyOwnerCreateError,
+  validateOwnerForm,
+  type OwnerCreateFieldErrors,
+} from '../users/ownerForm';
 
 export function FranchisesPage() {
   const navigate = useNavigate();
@@ -60,6 +66,8 @@ export function FranchisesPage() {
   const [ownerPhone, setOwnerPhone] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ownerFormError, setOwnerFormError] = useState<string | null>(null);
+  const [ownerFieldErrors, setOwnerFieldErrors] = useState<OwnerCreateFieldErrors>({});
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -128,7 +136,11 @@ export function FranchisesPage() {
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
     },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to assign owner.')),
+    onError: (err) => {
+      const classified = classifyOwnerCreateError(err, { fallback: 'Unable to assign owner.' });
+      setOwnerFormError(classified.formError);
+      setOwnerFieldErrors(classified.fieldErrors);
+    },
   });
 
   const createOwnerMutation = useMutation({
@@ -144,15 +156,23 @@ export function FranchisesPage() {
       phone?: string;
     }) => createFranchiseOwner(id, { full_name, email, phone }),
     onSuccess: async (data) => {
+      const result = applyOwnerCreateResult(true);
       setOwnerTarget(null);
       setOwnerFullName('');
       setOwnerEmail('');
       setOwnerPhone('');
+      setOwnerFormError(result.error);
+      setOwnerFieldErrors({});
       setFeedback(data.message);
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
     },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to create franchise owner.')),
+    onError: (err) => {
+      const classified = classifyOwnerCreateError(err, { ownerLabels: true });
+      const result = applyOwnerCreateResult(false, classified.formError);
+      setOwnerFormError(result.error);
+      setOwnerFieldErrors(classified.fieldErrors);
+    },
   });
 
   function resetOwnerForm(franchise: Franchise) {
@@ -162,6 +182,13 @@ export function FranchisesPage() {
     setOwnerProfileId(franchise.owner?.id ?? '');
     setOwnerFullName('');
     setOwnerPhone('');
+    setOwnerFormError(null);
+    setOwnerFieldErrors({});
+  }
+
+  function clearOwnerSubmitError() {
+    setOwnerFormError(null);
+    setOwnerFieldErrors({});
   }
 
   const items = listQuery.data?.items ?? [];
@@ -205,7 +232,7 @@ export function FranchisesPage() {
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
-      {error ? (
+      {error && !ownerTarget ? (
         <div className="mb-3">
           <ErrorBanner message={error} />
         </div>
@@ -418,25 +445,40 @@ export function FranchisesPage() {
       {ownerTarget ? (
         <Modal
           title={ownerMode === 'create' ? 'Create Franchise Owner' : 'Assign Franchise Owner'}
-          onClose={() => setOwnerTarget(null)}
+          onClose={() => {
+            setOwnerTarget(null);
+            clearOwnerSubmitError();
+          }}
         >
           <p className="mb-3 text-sm text-[#4A4A46]">
             Manage owner for <strong>{ownerTarget.name}</strong>. Passwords are never stored in
             profiles or shown in this UI.
           </p>
 
+          {ownerFormError ? (
+            <div className="mb-3">
+              <ErrorBanner message={ownerFormError} />
+            </div>
+          ) : null}
+
           <div className="mb-4 grid grid-cols-2 gap-2">
             <Button
               size="sm"
               variant={ownerMode === 'create' ? 'primary' : 'outline'}
-              onClick={() => setOwnerMode('create')}
+              onClick={() => {
+                setOwnerMode('create');
+                clearOwnerSubmitError();
+              }}
             >
               Create Owner
             </Button>
             <Button
               size="sm"
               variant={ownerMode === 'assign' ? 'primary' : 'outline'}
-              onClick={() => setOwnerMode('assign')}
+              onClick={() => {
+                setOwnerMode('assign');
+                clearOwnerSubmitError();
+              }}
             >
               Assign Existing
             </Button>
@@ -447,14 +489,38 @@ export function FranchisesPage() {
               <Field
                 label="Owner Name"
                 value={ownerFullName}
-                onChange={(e) => setOwnerFullName(e.target.value)}
+                error={ownerFieldErrors.full_name}
+                onChange={(e) => {
+                  setOwnerFullName(e.target.value);
+                  if (ownerFieldErrors.full_name || ownerFormError) {
+                    setOwnerFieldErrors((current) => {
+                      if (!current.full_name) return current;
+                      const next = { ...current };
+                      delete next.full_name;
+                      return next;
+                    });
+                    setOwnerFormError(null);
+                  }
+                }}
                 required
               />
               <Field
                 label="Owner Email"
                 type="email"
                 value={ownerEmail}
-                onChange={(e) => setOwnerEmail(e.target.value)}
+                error={ownerFieldErrors.email}
+                onChange={(e) => {
+                  setOwnerEmail(e.target.value);
+                  if (ownerFieldErrors.email || ownerFormError) {
+                    setOwnerFieldErrors((current) => {
+                      if (!current.email) return current;
+                      const next = { ...current };
+                      delete next.email;
+                      return next;
+                    });
+                    setOwnerFormError(null);
+                  }
+                }}
                 required
               />
               <Field
@@ -467,23 +533,40 @@ export function FranchisesPage() {
                 password is displayed here.
               </p>
               <div className="flex justify-end gap-2">
-                <Button variant="muted" onClick={() => setOwnerTarget(null)}>
+                <Button
+                  variant="muted"
+                  onClick={() => {
+                    setOwnerTarget(null);
+                    clearOwnerSubmitError();
+                  }}
+                >
                   Cancel
                 </Button>
                 <Button
-                  disabled={
-                    createOwnerMutation.isPending ||
-                    !ownerFullName.trim() ||
-                    !ownerEmail.trim()
-                  }
-                  onClick={() =>
+                  disabled={createOwnerMutation.isPending}
+                  onClick={() => {
+                    const errors = validateOwnerForm(
+                      {
+                        full_name: ownerFullName,
+                        email: ownerEmail,
+                        role: 'FRANCHISE_OWNER',
+                        franchise_id: ownerTarget.id,
+                      },
+                      { ownerLabels: true, requireFranchise: false },
+                    );
+                    setOwnerFieldErrors(errors);
+                    if (Object.keys(errors).length > 0) {
+                      setOwnerFormError(null);
+                      return;
+                    }
+                    setOwnerFormError(null);
                     createOwnerMutation.mutate({
                       id: ownerTarget.id,
                       full_name: ownerFullName.trim(),
                       email: ownerEmail.trim(),
                       phone: ownerPhone.trim() || undefined,
-                    })
-                  }
+                    });
+                  }}
                 >
                   {createOwnerMutation.isPending ? 'Creating…' : 'Create Owner'}
                 </Button>

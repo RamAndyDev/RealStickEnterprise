@@ -36,6 +36,8 @@ import {
   toWritePayload,
   type OutletFormValues,
 } from './OutletForm';
+import { LaunchProgressCompact, LaunchProgressDots } from './LaunchProgress';
+import { deriveLaunchProgress } from './launchStages';
 import { apiErrorMessage, formatDate, statusLabel, statusTone } from './status';
 
 export function FranchisesPage() {
@@ -265,9 +267,12 @@ export function FranchisesPage() {
                   </td>
                   <td className="px-4 py-3">{item.payment_status ?? '—'}</td>
                   <td className="px-4 py-3">
-                    {item.launch_progress_total
-                      ? `${item.launch_progress_completed}/${item.launch_progress_total}`
-                      : '—'}
+                    <LaunchProgressCompact
+                      source={{
+                        status: item.status,
+                        payment_status: item.payment_status,
+                      }}
+                    />
                   </td>
                   <td className="px-4 py-3">{formatDate(item.open_date)}</td>
                   <ActionsTd>
@@ -310,7 +315,12 @@ export function FranchisesPage() {
       {/* Prototype-style outlet cards for at-a-glance view */}
       {!listQuery.isLoading && items.length > 0 ? (
         <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
-          {items.map((item) => (
+          {items.map((item) => {
+            const launch = deriveLaunchProgress({
+              status: item.status,
+              payment_status: item.payment_status,
+            });
+            return (
             <button
               key={`card-${item.id}`}
               type="button"
@@ -337,10 +347,11 @@ export function FranchisesPage() {
                     <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">Status</div>
                   </div>
                   <div className="rounded-md bg-[#FDFAF4] p-2 text-center">
-                    <div className="font-serif text-[15px] font-bold text-[#E8621A]">
-                      {item.launch_progress_total
-                        ? `${item.launch_progress_completed}/${item.launch_progress_total}`
-                        : '—'}
+                    <div className="mb-1 flex justify-center">
+                      <LaunchProgressDots progress={launch} />
+                    </div>
+                    <div className="font-serif text-[13px] font-bold text-[#E8621A]">
+                      {launch.currentShortLabel}
                     </div>
                     <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">Launch</div>
                   </div>
@@ -348,7 +359,8 @@ export function FranchisesPage() {
                 <div className="text-[10px] text-[#8A8A84]">{item.address || 'No address'}</div>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 

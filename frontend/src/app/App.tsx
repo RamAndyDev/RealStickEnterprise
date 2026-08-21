@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { PublicLayout } from '../components/layout/PublicLayout';
 import { ProtectedRoute } from '../components/routing/ProtectedRoute';
+import { AuthenticatedDocumentTitle } from '../components/seo/AuthenticatedDocumentTitle';
 import { ForgotPasswordPage } from '../features/auth/ForgotPasswordPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { ProfilePage } from '../features/auth/ProfilePage';
@@ -39,6 +40,7 @@ import { AuditDetailPage } from '../features/audits/AuditDetailPage';
 export default function App() {
   return (
     <>
+    <AuthenticatedDocumentTitle />
     <InactivityGuard />
     <Routes>
       <Route element={<PublicLayout />}>

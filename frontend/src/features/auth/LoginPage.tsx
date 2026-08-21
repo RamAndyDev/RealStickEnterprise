@@ -3,11 +3,15 @@ import { Link, Navigate } from 'react-router-dom';
 
 import { useAuth } from './AuthProvider';
 import { staffLandingPath } from './nav';
+import { documentTitleForRole } from '../../components/seo/documentTitle';
 import { useDocumentMeta } from '../../components/seo/useDocumentMeta';
 
 export function LoginPage() {
   const { signIn, session, profile, loading } = useAuth();
-  useDocumentMeta('Staff Login | RealStick', 'Staff and POS login for RealStick Enterprise.');
+  useDocumentMeta(
+    documentTitleForRole(profile?.role) ?? 'Staff Login | RealStick',
+    'Staff and POS login for RealStick Enterprise.',
+  );
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);

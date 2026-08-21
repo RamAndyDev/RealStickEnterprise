@@ -14,6 +14,12 @@ class ReportPeriod(StrEnum):
     TODAY = 'today'
     LAST_7_DAYS = '7d'
     LAST_30_DAYS = '30d'
+    CUSTOM = 'custom'
+
+
+START_DATE_REQUIRED = 'Start date is required.'
+END_DATE_REQUIRED = 'End date is required.'
+START_AFTER_END = 'Start date cannot be after end date.'
 
 
 def utc_today() -> date:
@@ -46,12 +52,50 @@ def period_bounds(period: ReportPeriod, today: date | None = None) -> tuple[date
         return current, current
     if period == ReportPeriod.LAST_7_DAYS:
         return current - timedelta(days=6), current
-    return current - timedelta(days=29), current
+    if period == ReportPeriod.LAST_30_DAYS:
+        return current - timedelta(days=29), current
+    raise ValueError('Custom date range requires start_date and end_date.')
 
 
-def chart_days(period: ReportPeriod, today: date | None = None) -> list[date]:
-    """Daily chart series: 1 bar for Today, at most 7 bars otherwise (POC)."""
+def resolve_report_bounds(
+    period: ReportPeriod,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    today: date | None = None,
+) -> tuple[date, date]:
+    """Inclusive UTC calendar-day window for a report request."""
+    if period != ReportPeriod.CUSTOM:
+        return period_bounds(period, today)
+    if start_date is None:
+        raise ValueError(START_DATE_REQUIRED)
+    if end_date is None:
+        raise ValueError(END_DATE_REQUIRED)
+    if start_date > end_date:
+        raise ValueError(START_AFTER_END)
+    return start_date, end_date
+
+
+def chart_days(
+    period: ReportPeriod,
+    today: date | None = None,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+) -> list[date]:
+    """Daily chart series: 1 bar for Today, at most 7 bars otherwise (POC).
+
+    Custom ranges plot every inclusive UTC day between start and end.
+    """
     current = today or utc_today()
+    if period == ReportPeriod.CUSTOM:
+        if start is None or end is None:
+            raise ValueError('Custom date range requires start_date and end_date.')
+        days: list[date] = []
+        day = start
+        while day <= end:
+            days.append(day)
+            day += timedelta(days=1)
+        return days
     if period == ReportPeriod.TODAY:
         return [current]
     return [current - timedelta(days=offset) for offset in range(6, -1, -1)]

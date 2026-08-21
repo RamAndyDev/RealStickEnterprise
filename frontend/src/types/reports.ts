@@ -1,6 +1,6 @@
 import type { DatePreset } from './orders';
 
-export type ReportPeriod = Exclude<DatePreset, 'custom'>;
+export type ReportPeriod = DatePreset;
 
 export type ReportBillPreview = {
   id: string;

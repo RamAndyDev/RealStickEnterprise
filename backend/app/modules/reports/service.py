@@ -13,7 +13,7 @@ from app.modules.pos.schemas import PosPaymentMethod
 from app.modules.reports.dates import (
     ReportPeriod,
     chart_days,
-    period_bounds,
+    resolve_report_bounds,
     resolve_sales_date,
     utc_today,
 )
@@ -77,9 +77,11 @@ class ReportsService:
         profile: CurrentProfile,
         period: ReportPeriod,
         franchise_id: UUID | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> ReportSummary:
         scoped = self._report_scope(profile, franchise_id)
-        start, end = period_bounds(period)
+        start, end = self._period_window(period, start_date, end_date)
         orders = self.repo.list_completed_orders(
             franchise_id=scoped,
             from_date=start,
@@ -101,9 +103,11 @@ class ReportsService:
         profile: CurrentProfile,
         period: ReportPeriod,
         franchise_id: UUID | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> DailyRevenueResponse:
         scoped = self._report_scope(profile, franchise_id)
-        start, end = period_bounds(period)
+        start, end = self._period_window(period, start_date, end_date)
         orders = self.repo.list_completed_orders(
             franchise_id=scoped,
             from_date=start,
@@ -119,7 +123,7 @@ class ReportsService:
 
         points = [
             DailyRevenuePoint(date=day.isoformat(), revenue=_as_float(totals.get(day.isoformat(), Decimal('0.00'))))
-            for day in chart_days(period)
+            for day in chart_days(period, start=start, end=end)
         ]
         return DailyRevenueResponse(items=points)
 
@@ -128,9 +132,11 @@ class ReportsService:
         profile: CurrentProfile,
         period: ReportPeriod,
         franchise_id: UUID | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> ProductSalesResponse:
         scoped = self._report_scope(profile, franchise_id)
-        start, end = period_bounds(period)
+        start, end = self._period_window(period, start_date, end_date)
         orders = self.repo.list_completed_orders(
             franchise_id=scoped,
             from_date=start,
@@ -144,9 +150,11 @@ class ReportsService:
         profile: CurrentProfile,
         period: ReportPeriod,
         franchise_id: UUID | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> PaymentTotalsResponse:
         scoped = self._report_scope(profile, franchise_id)
-        start, end = period_bounds(period)
+        start, end = self._period_window(period, start_date, end_date)
         orders = self.repo.list_completed_orders(
             franchise_id=scoped,
             from_date=start,
@@ -312,6 +320,20 @@ class ReportsService:
             ),
             bills=[self._to_bill_preview(row) for row in orders],
         )
+
+    def _period_window(
+        self,
+        period: ReportPeriod,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> tuple[date, date]:
+        try:
+            return resolve_report_bounds(period, start_date, end_date)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
     def _report_scope(self, profile: CurrentProfile, requested: UUID | None) -> UUID | None:
         del requested  # never trust a client-supplied franchise_id

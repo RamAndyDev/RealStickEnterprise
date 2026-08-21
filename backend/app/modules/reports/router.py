@@ -39,40 +39,72 @@ def get_reports_service() -> ReportsService:
 def get_report_summary(
     profile: ReportsUser,
     period: ReportPeriod = Query(default=ReportPeriod.LAST_7_DAYS),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
     franchise_id: UUID | None = Query(default=None),
     service: ReportsService = Depends(get_reports_service),
 ) -> ReportSummary:
-    return service.summary(profile, period, franchise_id)
+    return service.summary(
+        profile,
+        period,
+        franchise_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get('/daily', response_model=DailyRevenueResponse)
 def get_daily_revenue(
     profile: ReportsUser,
     period: ReportPeriod = Query(default=ReportPeriod.LAST_7_DAYS),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
     franchise_id: UUID | None = Query(default=None),
     service: ReportsService = Depends(get_reports_service),
 ) -> DailyRevenueResponse:
-    return service.daily(profile, period, franchise_id)
+    return service.daily(
+        profile,
+        period,
+        franchise_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get('/products', response_model=ProductSalesResponse)
 def get_product_sales(
     profile: ReportsUser,
     period: ReportPeriod = Query(default=ReportPeriod.LAST_7_DAYS),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
     franchise_id: UUID | None = Query(default=None),
     service: ReportsService = Depends(get_reports_service),
 ) -> ProductSalesResponse:
-    return service.products(profile, period, franchise_id)
+    return service.products(
+        profile,
+        period,
+        franchise_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get('/payments', response_model=PaymentTotalsResponse)
 def get_payment_totals(
     profile: ReportsUser,
     period: ReportPeriod = Query(default=ReportPeriod.LAST_7_DAYS),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
     franchise_id: UUID | None = Query(default=None),
     service: ReportsService = Depends(get_reports_service),
 ) -> PaymentTotalsResponse:
-    return service.payments(profile, period, franchise_id)
+    return service.payments(
+        profile,
+        period,
+        franchise_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get('/dashboard/admin', response_model=AdminDashboard)

@@ -193,6 +193,13 @@ class UsersService:
 
         rows = self.repo.list_profiles(role=UserRole.EMPLOYEE.value, franchise_id=franchise_id)
         items = self._hydrate(rows)
+        from app.modules.employee_sessions.service import EmployeeSessionsService
+
+        logged_in_ids = EmployeeSessionsService().logged_in_employee_ids()
+        items = [
+            item.model_copy(update={'is_logged_in': str(item.id) in logged_in_ids})
+            for item in items
+        ]
         active_count = sum(1 for item in items if item.is_active)
         return EmployeeListResponse(
             items=items,

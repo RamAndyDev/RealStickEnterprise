@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
 from uuid import UUID
+
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 
 from app.core.roles import UserRole
 from app.core.security import (
+    AuthenticatedUser,
     CurrentProfile,
     get_current_profile,
+    get_current_user,
     require_franchise_access,
     require_role,
 )
@@ -17,7 +21,14 @@ from app.modules.auth.schemas import (
     LoginResponse,
     MeResponse,
 )
+from app.modules.employee_sessions.schemas import (
+    EmployeeSessionLogoutRequest,
+    EmployeeSessionLogoutResponse,
+)
+from app.modules.employee_sessions.service import EmployeeSessionsService
 from app.modules.users.service import UsersService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/auth', tags=['auth'])
 
@@ -28,6 +39,10 @@ def get_users_service() -> UsersService:
 
 def get_login_service() -> AuthLoginService:
     return AuthLoginService()
+
+
+def get_employee_sessions_service() -> EmployeeSessionsService:
+    return EmployeeSessionsService()
 
 
 @router.post('/login', response_model=LoginResponse)
@@ -42,6 +57,7 @@ def login(
         refresh_token=payload['refresh_token'],
         token_type=payload.get('token_type') or 'bearer',
         expires_in=payload.get('expires_in'),
+        employee_session_id=payload.get('employee_session_id'),
     )
 
 
@@ -79,6 +95,25 @@ def read_me(profile: CurrentProfile = Depends(get_current_profile)) -> MeRespons
         is_active=profile.is_active,
         created_at=profile.created_at,
     )
+
+
+@router.post('/employee-sessions/logout', response_model=EmployeeSessionLogoutResponse)
+def logout_employee_session(
+    profile: CurrentProfile = Depends(get_current_profile),
+    user: AuthenticatedUser = Depends(get_current_user),
+    body: EmployeeSessionLogoutRequest = Body(default=EmployeeSessionLogoutRequest()),
+    service: EmployeeSessionsService = Depends(get_employee_sessions_service),
+) -> EmployeeSessionLogoutResponse:
+    """Complete the current employee session. Non-employees and missing sessions are no-ops."""
+    try:
+        service.complete_logout(
+            profile=profile,
+            auth_user=user,
+            employee_session_id=body.employee_session_id,
+        )
+    except Exception:
+        logger.warning('Employee session tracking failed on logout', exc_info=True)
+    return EmployeeSessionLogoutResponse(ok=True)
 
 
 @router.post('/change-password', response_model=ChangePasswordResponse)

@@ -46,6 +46,7 @@ class ManagedUser(BaseModel):
     franchise_id: UUID | None = None
     franchise_name: str | None = None
     is_active: bool
+    is_logged_in: bool | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

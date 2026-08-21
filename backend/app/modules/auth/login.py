@@ -16,14 +16,20 @@ from app.modules.auth.identity import (
     looks_like_email,
     normalize_login_id,
 )
+from app.modules.employee_sessions.service import EmployeeSessionsService
 from app.modules.users.repository import UsersRepository
 
 logger = logging.getLogger(__name__)
 
 
 class AuthLoginService:
-    def __init__(self, repo: UsersRepository | None = None) -> None:
+    def __init__(
+        self,
+        repo: UsersRepository | None = None,
+        sessions: EmployeeSessionsService | None = None,
+    ) -> None:
         self.repo = repo or UsersRepository()
+        self.sessions = sessions or EmployeeSessionsService()
 
     def login(self, identifier: str, password: str) -> dict[str, Any]:
         raw = identifier.strip()
@@ -62,7 +68,9 @@ class AuthLoginService:
         auth_email = self.repo.get_auth_email(str(profile['id']))
         if not auth_email:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=INVALID_CREDENTIALS)
-        return self._sign_in(auth_email, password)
+        tokens = self._sign_in(auth_email, password)
+        self._track_employee_login(profile, tokens)
+        return tokens
 
     def _sign_in(self, email: str, password: str) -> dict[str, Any]:
         try:
@@ -86,6 +94,21 @@ class AuthLoginService:
             'token_type': payload.get('token_type') or 'bearer',
             'expires_in': payload.get('expires_in'),
         }
+
+    def _track_employee_login(self, profile: dict[str, Any], tokens: dict[str, Any]) -> None:
+        """Record an ACTIVE employee session. Tracking failure must not block login."""
+        try:
+            row = self.sessions.record_login(
+                employee_id=profile['id'],
+                employee_name=str(profile.get('full_name') or 'Employee'),
+                access_token=tokens.get('access_token'),
+                role=str(profile.get('role') or ''),
+            )
+        except Exception:
+            logger.warning('Employee session tracking failed after login', exc_info=True)
+            return
+        if row and row.get('id'):
+            tokens['employee_session_id'] = row['id']
 
 
 def supabase_password_grant(email: str, password: str) -> dict[str, Any]:

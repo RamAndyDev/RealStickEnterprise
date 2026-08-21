@@ -22,6 +22,7 @@ import {
 } from '../../lib/usersApi';
 import type { ManagedUser } from '../../types/user';
 import { apiErrorMessage } from '../franchises/status';
+import { EmployeeActivityDialog } from './EmployeeActivityDialog';
 import { employeeUserIdLabel } from './labels';
 import { UserDetail } from './UserDetail';
 import { UserForm, emptyUserForm, userToForm, type UserFormValues } from './UserForm';
@@ -36,6 +37,7 @@ export function EmployeesPage() {
   const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
   const [resetPassword, setResetPassword] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
+  const [activityTarget, setActivityTarget] = useState<ManagedUser | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,6 +169,7 @@ export function EmployeesPage() {
                 <th className="px-4 py-3 font-semibold">User ID</th>
                 <th className="px-4 py-3 font-semibold">Name</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Login</th>
                 <ActionsTh />
               </tr>
             </thead>
@@ -180,6 +183,11 @@ export function EmployeesPage() {
                   <td className="px-4 py-3">
                     <Badge tone={item.is_active ? 'green' : 'muted'}>
                       {item.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={item.is_logged_in ? 'green' : 'muted'}>
+                      {item.is_logged_in ? 'Logged In' : 'Logged Out'}
                     </Badge>
                   </td>
                   <ActionsTd>
@@ -198,6 +206,9 @@ export function EmployeesPage() {
                     </ActionButton>
                     <ActionButton fit="lg" variant="muted" onClick={() => setResetTarget(item)}>
                       Reset Password
+                    </ActionButton>
+                    <ActionButton fit="lg" variant="outline" onClick={() => setActivityTarget(item)}>
+                      View Activity
                     </ActionButton>
                   </ActionsTd>
                 </tr>
@@ -340,6 +351,13 @@ export function EmployeesPage() {
             </Button>
           </div>
         </Modal>
+      ) : null}
+
+      {activityTarget ? (
+        <EmployeeActivityDialog
+          employee={activityTarget}
+          onClose={() => setActivityTarget(null)}
+        />
       ) : null}
     </div>
   );

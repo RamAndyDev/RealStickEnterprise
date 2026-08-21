@@ -39,6 +39,7 @@ class LoginResponse(BaseModel):
     refresh_token: str
     token_type: str = 'bearer'
     expires_in: int | None = None
+    employee_session_id: UUID | None = None
 
 
 class ChangePasswordRequest(BaseModel):

@@ -36,6 +36,7 @@ class AuthenticatedUser(BaseModel):
     id: UUID
     email: str | None = None
     role: str | None = None  # JWT claim (usually "authenticated"), not app role
+    session_id: str | None = None  # GoTrue session_id when present; used for employee session tracking
 
 
 class CurrentProfile(BaseModel):
@@ -136,10 +137,13 @@ def get_current_user(
         raise _unauthorized('Token subject is invalid') from exc
 
     email = payload.get('email')
+    raw_session_id = payload.get('session_id')
+    session_id = str(raw_session_id).strip() if raw_session_id else None
     return AuthenticatedUser(
         id=user_id,
         email=str(email) if email else None,
         role=str(payload.get('role')) if payload.get('role') else None,
+        session_id=session_id or None,
     )
 
 

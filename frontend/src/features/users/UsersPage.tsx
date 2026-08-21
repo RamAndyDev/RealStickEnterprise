@@ -124,7 +124,10 @@ export function UsersPage() {
 
   const items = listQuery.data?.items ?? [];
   const franchises = franchisesQuery.data?.items ?? [];
-  const createInitial = useMemo(() => emptyUserForm(roleFilter || 'SYSTEM_ADMIN'), [roleFilter]);
+  const createInitial = useMemo(
+    () => emptyUserForm(roleFilter || 'SYSTEM_ADMIN'),
+    [roleFilter],
+  );
 
   return (
     <div className="mx-auto max-w-6xl">

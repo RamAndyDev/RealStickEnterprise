@@ -407,6 +407,7 @@ def client(monkeypatch, fake_db):
     monkeypatch.setattr('app.modules.public.repository.get_supabase', lambda: fake_db)
     monkeypatch.setattr('app.modules.gallery.repository.get_supabase', lambda: fake_db)
     monkeypatch.setattr('app.modules.audits.repository.get_supabase', lambda: fake_db)
+    monkeypatch.setattr('app.modules.employee_sessions.repository.get_supabase', lambda: fake_db)
     return TestClient(app)
 
 
@@ -420,6 +421,7 @@ def make_access_token(
     audience: str | list[str] | None = 'authenticated',
     expires_delta: timedelta = timedelta(hours=1),
     include_sub: bool = True,
+    session_id: str | None = None,
     es256_material=None,
 ) -> str:
     settings = get_settings()
@@ -439,19 +441,26 @@ def make_access_token(
     }
     if include_sub:
         payload['sub'] = str(user_id)
+    if session_id:
+        payload['session_id'] = str(session_id)
 
     headers = {'kid': kid, 'alg': 'ES256', 'typ': 'JWT'}
     return jwt.encode(payload, private_key, algorithm='ES256', headers=headers)
 
 
-def auth_header(user_id, email: str, es256_material) -> dict[str, str]:
-    token = make_access_token(user_id=user_id, email=email, es256_material=es256_material)
+def auth_header(user_id, email: str, es256_material, session_id: str | None = None) -> dict[str, str]:
+    token = make_access_token(
+        user_id=user_id,
+        email=email,
+        es256_material=es256_material,
+        session_id=session_id,
+    )
     return {'Authorization': f'Bearer {token}'}
 
 
 @pytest.fixture
 def auth_header_factory(es256_material):
-    def _factory(user_id, email: str) -> dict[str, str]:
-        return auth_header(user_id, email, es256_material)
+    def _factory(user_id, email: str, session_id: str | None = None) -> dict[str, str]:
+        return auth_header(user_id, email, es256_material, session_id=session_id)
 
     return _factory

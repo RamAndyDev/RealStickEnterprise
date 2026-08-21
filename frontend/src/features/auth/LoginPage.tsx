@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 
 import { useAuth } from './AuthProvider';
+import { toLoginErrorMessage } from './loginError';
 import { staffLandingPath } from './nav';
 import { documentTitleForRole } from '../../components/seo/documentTitle';
 import { useDocumentMeta } from '../../components/seo/useDocumentMeta';
@@ -28,9 +29,7 @@ export function LoginPage() {
     try {
       await signIn(identifier.trim(), password);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to sign in. Check your credentials.';
-      setFormError(message);
+      setFormError(toLoginErrorMessage(error));
     } finally {
       setSubmitting(false);
     }

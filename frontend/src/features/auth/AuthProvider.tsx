@@ -12,6 +12,7 @@ import type { Session } from '@supabase/supabase-js';
 import { api, fetchCurrentProfile } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import type { AuthProfile, UserRole } from '../../types/auth';
+import { toLoginErrorMessage } from './loginError';
 
 type AuthContextValue = {
   session: Session | null;
@@ -43,7 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadProfile = useCallback(async (activeSession: Session | null) => {
+  const loadProfile = useCallback(async (
+    activeSession: Session | null,
+    options?: { rethrow?: boolean },
+  ) => {
     if (!activeSession?.access_token) {
       setProfile(null);
       return;
@@ -54,10 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
     } catch (err) {
       setProfile(null);
-      setError(toErrorMessage(err, 'Unable to load profile'));
+      setError(
+        options?.rethrow ? toLoginErrorMessage(err) : toErrorMessage(err, 'Unable to load profile'),
+      );
       // Invalid/inactive application access: clear Supabase session.
       await supabase.auth.signOut();
       setSession(null);
+      if (options?.rethrow) throw err;
     }
   }, []);
 
@@ -106,16 +113,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refresh_token: data.refresh_token,
       });
       if (sessionError || !sessionData.session) {
-        const message = sessionError?.message || 'Unable to start a session.';
+        const message = toLoginErrorMessage(sessionError ?? new Error('Unable to start a session.'));
         setError(message);
         throw new Error(message);
       }
       setSession(sessionData.session);
-      await loadProfile(sessionData.session);
+      await loadProfile(sessionData.session, { rethrow: true });
     } catch (err) {
-      const message = toErrorMessage(err, 'Unable to sign in. Check your credentials.');
+      console.error('Sign-in failed', err);
+      const message = toLoginErrorMessage(err);
       setError(message);
-      throw err instanceof Error ? err : new Error(message);
+      throw new Error(message);
     }
   }, [loadProfile]);
 

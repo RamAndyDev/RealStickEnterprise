@@ -433,7 +433,24 @@ def test_selling_price_must_be_positive_and_below_master(client, auth_header_fac
         == 200
     )
 
-    for invalid in (100, 105, 0, -1, 100.00, 99.999):
+    assert (
+        client.patch(
+            f'/api/v1/owner/menu/{product["id"]}',
+            headers=_owner(auth_header_factory),
+            json={'selling_price': 100},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.patch(
+            f'/api/v1/owner/menu/{product["id"]}',
+            headers=_owner(auth_header_factory),
+            json={'selling_price': 100.00},
+        ).status_code
+        == 200
+    )
+
+    for invalid in (105, 0, -1, 99.999):
         response = client.patch(
             f'/api/v1/owner/menu/{product["id"]}',
             headers=_owner(auth_header_factory),
@@ -444,9 +461,17 @@ def test_selling_price_must_be_positive_and_below_master(client, auth_header_fac
     admin_invalid = client.post(
         f'/api/v1/admin/franchises/{FRANCHISE_B}/products',
         headers=_admin(auth_header_factory),
-        json={'product_id': product['id'], 'selling_price': 100, 'is_active': True},
+        json={'product_id': product['id'], 'selling_price': 101, 'is_active': True},
     )
     assert admin_invalid.status_code in {400, 422}
+
+    admin_equal = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/products',
+        headers=_admin(auth_header_factory),
+        json={'product_id': product['id'], 'selling_price': 100, 'is_active': True},
+    )
+    assert admin_equal.status_code == 201
+    assert admin_equal.json()['selling_price'] == 100
 
 
 def test_master_price_reduction_below_selling_price_is_rejected(client, auth_header_factory, fake_db):
@@ -481,6 +506,13 @@ def test_master_price_reduction_below_selling_price_is_rejected(client, auth_hea
         json={'price': 91},
     )
     assert allowed.status_code == 200
+
+    equal_ok = client.patch(
+        f'/api/v1/admin/products/{product["id"]}',
+        headers=_admin(auth_header_factory),
+        json={'price': 90},
+    )
+    assert equal_ok.status_code == 200
     still = next(
         row
         for row in fake_db.tables['franchise_product_prices']
@@ -720,10 +752,18 @@ def test_owner_existing_valid_pricing_still_works(client, auth_header_factory):
     assert valid.json()['selling_price'] == 27
     assert valid.json()['master_price'] == 100
 
-    too_high = client.patch(
+    at_master = client.patch(
         f'/api/v1/owner/menu/{PRODUCT_NIMBU}',
         headers=_owner(auth_header_factory),
         json={'selling_price': 100},
+    )
+    assert at_master.status_code == 200
+    assert at_master.json()['selling_price'] == 100
+
+    too_high = client.patch(
+        f'/api/v1/owner/menu/{PRODUCT_NIMBU}',
+        headers=_owner(auth_header_factory),
+        json={'selling_price': 101},
     )
     assert too_high.status_code in {400, 422}
 

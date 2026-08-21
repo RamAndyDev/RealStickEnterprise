@@ -5,7 +5,7 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 
 SELLING_PRICE_NOT_POSITIVE = 'Selling price must be greater than 0.'
-SELLING_PRICE_NOT_BELOW_MASTER = 'Selling price must be strictly less than the master price.'
+SELLING_PRICE_EXCEEDS_MASTER = 'Selling price must not exceed the master price.'
 MASTER_PRICE_CONFLICT = 'Master price cannot be reduced below existing franchise selling prices.'
 OWNER_PRICE_INACTIVE_PRODUCT = (
     'Selling price can only be edited when the product is active.'
@@ -27,16 +27,16 @@ def validate_selling_price(selling_price: object, master_price: object) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=SELLING_PRICE_NOT_POSITIVE,
         )
-    if selling >= master:
+    if selling > master:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=SELLING_PRICE_NOT_BELOW_MASTER,
+            detail=SELLING_PRICE_EXCEEDS_MASTER,
         )
 
 
 def selling_price_conflicts_with_master(selling_prices: list[object], master_price: object) -> bool:
     master = as_money(master_price)
-    return any(as_money(price) >= master for price in selling_prices)
+    return any(as_money(price) > master for price in selling_prices)
 
 
 def owner_can_edit_selling_price(product: dict, assignment: dict) -> bool:

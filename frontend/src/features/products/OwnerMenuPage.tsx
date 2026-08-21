@@ -261,7 +261,7 @@ export function OwnerMenuPage() {
               {formatINR(editRow.master_price)}
             </div>
             <p className="mt-1 text-[11px] text-[#8A8A84]">
-              Selling price must be greater than 0 and strictly less than the master price.
+              Selling price must be greater than 0 and must not exceed the master price.
             </p>
           </div>
           <Field

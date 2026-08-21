@@ -224,7 +224,7 @@ export function FranchiseProductsPanel({
             onChange={(e) => setEditPrice(e.target.value)}
           />
           <p className="mb-3 text-[11px] text-[#8A8A84]">
-            Must be greater than 0 and strictly less than the master price.
+            Must be greater than 0 and must not exceed the master price.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="muted" onClick={() => setEditRow(null)}>

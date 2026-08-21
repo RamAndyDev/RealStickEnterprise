@@ -618,8 +618,8 @@ class FakeDatabase:
         )
         if product is None:
             raise Exception('Product not found')
-        if float(selling) >= float(product['price']):
-            raise Exception('Selling price must be strictly less than the master price')
+        if float(selling) > float(product['price']):
+            raise Exception('Selling price must not exceed the master price')
 
     def enforce_master_price(self, product_row: dict) -> None:
         master = product_row.get('price')
@@ -630,7 +630,7 @@ class FakeDatabase:
                 continue
             if not assignment.get('is_active'):
                 continue
-            if float(assignment.get('selling_price') or 0) >= float(master):
+            if float(assignment.get('selling_price') or 0) > float(master):
                 raise Exception(
                     'Master price cannot be reduced below existing franchise selling prices.'
                 )

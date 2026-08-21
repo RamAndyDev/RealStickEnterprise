@@ -157,16 +157,18 @@ describe('search filtering', () => {
 });
 
 describe('master price validation', () => {
-  it('rejects selling prices that are not strictly less than the master price', () => {
-    assert.equal(sellingPriceError('90', 100), null);
-    assert.equal(
-      sellingPriceError('100', 100),
-      'Selling price must be strictly less than the master price.',
-    );
+  it('allows selling prices below or equal to the master price', () => {
+    assert.equal(sellingPriceError('99', 100), null);
+    assert.equal(sellingPriceError('100', 100), null);
+  });
+
+  it('rejects selling prices above the master price, zero, and negative', () => {
     assert.equal(
       sellingPriceError('101', 100),
-      'Selling price must be strictly less than the master price.',
+      'Selling price must not exceed the master price.',
     );
+    assert.equal(sellingPriceError('0', 100), 'Selling price must be greater than 0.');
+    assert.equal(sellingPriceError('-1', 100), 'Enter a valid price with up to 2 decimal places.');
   });
 
   it('blocks save for selected products with invalid selling prices', () => {
@@ -175,12 +177,12 @@ describe('master price validation', () => {
       product({ id: 'b', name: 'Pistachio Kulfi', price: 150 }),
     ];
     const draft = {
-      a: { selected: true, sellingPrice: '110' },
-      b: { selected: true, sellingPrice: '150' },
+      a: { selected: true, sellingPrice: '120' },
+      b: { selected: true, sellingPrice: '151' },
     };
     const errors = draftValidationErrors(catalog, draft, sellingPriceError);
     assert.equal(errors.a, undefined);
-    assert.equal(errors.b, 'Selling price must be strictly less than the master price.');
+    assert.equal(errors.b, 'Selling price must not exceed the master price.');
   });
 });
 

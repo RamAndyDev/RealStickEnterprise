@@ -86,8 +86,8 @@ export function sellingPriceError(
   if (Number.isNaN(amount) || amount <= 0) {
     return 'Selling price must be greater than 0.';
   }
-  if (masterPrice != null && amount >= masterPrice) {
-    return 'Selling price must be strictly less than the master price.';
+  if (masterPrice != null && amount > masterPrice) {
+    return 'Selling price must not exceed the master price.';
   }
   return null;
 }

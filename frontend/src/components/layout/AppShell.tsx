@@ -8,7 +8,9 @@ import { navForRole } from '../../features/auth/nav';
 export function AppShell() {
   const { profile, signOut } = useAuth();
   const { pathname } = useLocation();
-  const items = navForRole(profile?.role);
+  const ownerAuditEnabled =
+    profile?.role === 'FRANCHISE_OWNER' ? profile.franchise_owner_audit_enabled === true : true;
+  const items = navForRole(profile?.role, { franchiseOwnerAuditEnabled: ownerAuditEnabled });
   const isPos = pathname === '/pos';
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerId = useId();

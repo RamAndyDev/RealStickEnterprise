@@ -1,3 +1,7 @@
+export type FranchiseAuditSetting = {
+  franchise_owner_audit_enabled: boolean;
+};
+
 export type GstSettings = {
   id: string;
   rate: number;

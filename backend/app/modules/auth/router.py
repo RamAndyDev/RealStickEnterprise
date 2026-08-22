@@ -83,6 +83,14 @@ def read_me(profile: CurrentProfile = Depends(get_current_profile)) -> MeRespons
         except Exception:
             franchise_name = None
 
+    franchise_owner_audit_enabled = False
+    try:
+        from app.modules.settings.service import SettingsService
+
+        franchise_owner_audit_enabled = SettingsService().is_franchise_owner_audit_enabled()
+    except Exception:
+        franchise_owner_audit_enabled = False
+
     return MeResponse(
         id=profile.id,
         email=profile.email,
@@ -94,6 +102,7 @@ def read_me(profile: CurrentProfile = Depends(get_current_profile)) -> MeRespons
         phone=profile.phone,
         is_active=profile.is_active,
         created_at=profile.created_at,
+        franchise_owner_audit_enabled=franchise_owner_audit_enabled,
     )
 
 

@@ -30,6 +30,16 @@ class GstSettings(BaseModel):
     updated_at: datetime | None = None
 
 
+class FranchiseAuditSetting(BaseModel):
+    franchise_owner_audit_enabled: bool
+
+
+class FranchiseAuditSettingUpdate(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+    franchise_owner_audit_enabled: bool
+
+
 class GstUpdate(BaseModel):
     model_config = ConfigDict(extra='ignore')
 

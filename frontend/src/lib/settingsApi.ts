@@ -1,5 +1,6 @@
 import { api } from './api';
 import type {
+  FranchiseAuditSetting,
   GstSettings,
   Offer,
   OfferListResponse,
@@ -8,6 +9,20 @@ import type {
   PromotionListResponse,
   PromotionWritePayload,
 } from '../types/settings';
+
+export async function fetchFranchiseAuditSetting(): Promise<FranchiseAuditSetting> {
+  const { data } = await api.get<FranchiseAuditSetting>('/admin/settings/franchise-audit');
+  return data;
+}
+
+export async function updateFranchiseAuditSetting(
+  franchiseOwnerAuditEnabled: boolean,
+): Promise<FranchiseAuditSetting> {
+  const { data } = await api.patch<FranchiseAuditSetting>('/admin/settings/franchise-audit', {
+    franchise_owner_audit_enabled: franchiseOwnerAuditEnabled,
+  });
+  return data;
+}
 
 export async function fetchGstSettings(): Promise<GstSettings> {
   const { data } = await api.get<GstSettings>('/admin/gst');

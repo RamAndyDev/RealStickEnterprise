@@ -379,6 +379,14 @@ def fake_db():
             'updated_at': now,
         }
     ]
+    system_settings = [
+        {
+            'key': 'franchise_owner_audit_enabled',
+            'value': False,
+            'created_at': now,
+            'updated_at': now,
+        }
+    ]
     return FakeDatabase(
         profiles=PROFILES,
         franchises=franchises,
@@ -389,6 +397,7 @@ def fake_db():
         products=products,
         franchise_product_prices=franchise_product_prices,
         gst_settings=gst_settings,
+        system_settings=system_settings,
         auth_users=auth_users,
     )
 

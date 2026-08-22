@@ -19,6 +19,7 @@ class MeResponse(BaseModel):
     phone: str | None = None
     is_active: bool
     created_at: datetime | None = None
+    franchise_owner_audit_enabled: bool = False
 
 
 class LoginRequest(BaseModel):

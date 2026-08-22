@@ -11,4 +11,5 @@ export type AuthProfile = {
   phone?: string | null;
   is_active: boolean;
   created_at?: string | null;
+  franchise_owner_audit_enabled?: boolean;
 };

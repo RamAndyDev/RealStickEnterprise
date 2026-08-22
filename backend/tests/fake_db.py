@@ -227,6 +227,12 @@ class FakeQuery:
                             and str(existing.get('product_id')) == str(row.get('product_id'))
                         ):
                             raise Exception('duplicate key value violates unique constraint')
+                if self._table == 'system_settings':
+                    if not row.get('key'):
+                        raise Exception('system_settings.key is required')
+                    for existing in table_rows:
+                        if existing.get('key') == row.get('key'):
+                            raise Exception('duplicate key value violates unique constraint')
                 if self._table == 'gst_settings':
                     row.setdefault('is_active', True)
                     if row.get('is_active'):
@@ -564,6 +570,7 @@ class FakeDatabase:
         products: list[dict] | None = None,
         franchise_product_prices: list[dict] | None = None,
         gst_settings: list[dict] | None = None,
+        system_settings: list[dict] | None = None,
         discounts: list[dict] | None = None,
         orders: list[dict] | None = None,
         order_items: list[dict] | None = None,
@@ -588,6 +595,7 @@ class FakeDatabase:
             'products': deepcopy(products or []),
             'franchise_product_prices': deepcopy(franchise_product_prices or []),
             'gst_settings': deepcopy(gst_settings or []),
+            'system_settings': deepcopy(system_settings or []),
             'discounts': deepcopy(discounts or []),
             'orders': deepcopy(orders or []),
             'order_items': deepcopy(order_items or []),

@@ -36,6 +36,7 @@ import {
   toWritePayload,
   type OutletFormValues,
 } from './OutletForm';
+import { FranchiseAuditSettings } from './FranchiseAuditSettings';
 import { LaunchProgressCompact, LaunchProgressDots } from './LaunchProgress';
 import { deriveLaunchProgress } from './launchStages';
 import { apiErrorMessage, formatDate, statusLabel, statusTone } from './status';
@@ -205,6 +206,8 @@ export function FranchisesPage() {
         </div>
         <Button onClick={() => setShowAdd(true)}>+ Add Outlet</Button>
       </div>
+
+      <FranchiseAuditSettings />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_220px]">
         <input

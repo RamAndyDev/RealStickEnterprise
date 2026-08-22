@@ -364,6 +364,9 @@ def test_admin_and_owner_see_audit_employee_does_not():
     )
     nav = NAV_TS.read_text(encoding='utf-8')
     assert "export const AUDIT_ACCESS_ROLES: UserRole[] = ['SYSTEM_ADMIN', 'FRANCHISE_OWNER']" in nav
+    assert 'canAccessAudit' in nav
+    assert 'franchiseOwnerAuditEnabled' in nav
+    assert 'AuditProtectedRoute' in source
     audit_item = next(item for item in _nav_items() if item[1] == '/audit')
     assert audit_item[2] == ['SYSTEM_ADMIN', 'FRANCHISE_OWNER']
 
@@ -375,8 +378,18 @@ def test_audit_option_is_nav_not_franchise_management_action():
     detail = (ROOT / 'frontend' / 'src' / 'features' / 'franchises' / 'FranchiseDetailPage.tsx').read_text(
         encoding='utf-8'
     )
-    assert 'Audit' not in franchises
+    settings_copy = (
+        ROOT / 'frontend' / 'src' / 'features' / 'franchises' / 'franchiseAuditSetting.ts'
+    ).read_text(encoding='utf-8')
+    settings_ui = (
+        ROOT / 'frontend' / 'src' / 'features' / 'franchises' / 'FranchiseAuditSettings.tsx'
+    ).read_text(encoding='utf-8')
+    assert 'FranchiseAuditSettings' in franchises
+    assert "to={`/audit" not in franchises
+    assert 'path="/audit"' not in franchises
     assert 'Audit' not in detail
+    assert 'Allow Franchise Owners to access Audit' in settings_copy
+    assert 'FRANCHISE_AUDIT_SETTING_COPY.label' in settings_ui
     audit_item = next(item for item in _nav_items() if item[0] == 'Audit')
     assert audit_item[1] == '/audit'
 

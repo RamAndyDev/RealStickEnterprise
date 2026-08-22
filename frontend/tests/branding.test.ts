@@ -53,7 +53,9 @@ describe('Franchise Audit visibility', () => {
   it('keeps Admin and Franchise Owner access, and hides Audit from employees', () => {
     assert.deepEqual(AUDIT_ACCESS_ROLES, ['SYSTEM_ADMIN', 'FRANCHISE_OWNER']);
     const adminLabels = navForRole('SYSTEM_ADMIN').map((item) => item.label);
-    const ownerLabels = navForRole('FRANCHISE_OWNER').map((item) => item.label);
+    const ownerLabels = navForRole('FRANCHISE_OWNER', { franchiseOwnerAuditEnabled: true }).map(
+      (item) => item.label,
+    );
     const employeeLabels = navForRole('EMPLOYEE').map((item) => item.label);
     assert.equal(adminLabels.includes('Audit'), true);
     assert.equal(ownerLabels.includes('Audit'), true);
@@ -63,13 +65,20 @@ describe('Franchise Audit visibility', () => {
       true,
     );
     assert.equal(
-      navForRole('FRANCHISE_OWNER').some((item) => item.path === '/audit'),
+      navForRole('FRANCHISE_OWNER', { franchiseOwnerAuditEnabled: true }).some(
+        (item) => item.path === '/audit',
+      ),
       true,
+    );
+    assert.equal(
+      navForRole('FRANCHISE_OWNER').some((item) => item.path === '/audit'),
+      false,
     );
   });
 
   it('is a staff navigation item, not a Franchise Management list/detail action', () => {
-    assert.equal(franchisesPage.includes('Audit'), false);
+    assert.equal(franchisesPage.includes('FranchiseAuditSettings'), true);
+    assert.equal(franchisesPage.includes('to={`/audit'), false);
     assert.equal(franchiseDetail.includes('Audit'), false);
     const audit = navForRole('SYSTEM_ADMIN').find((item) => item.label === 'Audit');
     assert.equal(audit?.path, '/audit');

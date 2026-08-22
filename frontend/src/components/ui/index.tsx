@@ -1,3 +1,4 @@
+import { MoreHorizontal } from 'lucide-react';
 import {
   useEffect,
   useRef,
@@ -17,6 +18,19 @@ import {
   ACTIONS_TH_CLASS,
   type ActionFit,
 } from './actionFit';
+
+export { initialsFromName } from './initials';
+export {
+  ActionMenuItem,
+  ActionMenuSeparator,
+  AdminListCard,
+  FilterSelect,
+  InitialsAvatar,
+  ListToolbar,
+  PageHeader,
+  SegmentedTabs,
+  TableSkeleton,
+} from './adminList';
 
 export type { ActionFit } from './actionFit';
 export {
@@ -43,7 +57,7 @@ export function Button({
   ...props
 }: BtnProps) {
   const base =
-    'inline-flex items-center justify-center rounded-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-60';
+    'inline-flex items-center justify-center rounded-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A7A4A]';
   const sizes = fit
     ? ACTION_FIT_CLASS[fit]
     : size === 'sm'
@@ -102,12 +116,14 @@ export function ActionGroup({
 export function ActionsTh({
   children = 'Actions',
   align = 'start',
+  className = '',
 }: {
   children?: ReactNode;
   align?: 'start' | 'end';
+  className?: string;
 }) {
   return (
-    <th className={`${ACTIONS_TH_CLASS} ${align === 'end' ? 'text-right' : 'text-left'}`}>
+    <th className={`${ACTIONS_TH_CLASS} ${align === 'end' ? 'text-right' : 'text-left'} ${className}`.trim()}>
       {children}
     </th>
   );
@@ -116,12 +132,14 @@ export function ActionsTh({
 export function ActionsTd({
   children,
   align = 'start',
+  className = '',
 }: {
   children: ReactNode;
   align?: 'start' | 'end';
+  className?: string;
 }) {
   return (
-    <td className={`${ACTIONS_TD_CLASS} ${align === 'end' ? 'text-right' : 'text-left'}`}>
+    <td className={`${ACTIONS_TD_CLASS} ${align === 'end' ? 'text-right' : 'text-left'} ${className}`.trim()}>
       <ActionGroup align={align}>{children}</ActionGroup>
     </td>
   );
@@ -134,9 +152,11 @@ export function ActionSelect({ className = '', ...props }: SelectHTMLAttributes<
 export function ActionMenu({
   label = 'More',
   children,
+  icon = true,
 }: {
   label?: string;
   children: ReactNode;
+  icon?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -148,24 +168,48 @@ export function ActionMenu({
         setOpen(false);
       }
     }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   return (
     <div className="relative" ref={rootRef}>
-      <ActionButton
-        variant="muted"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => setOpen((current) => !current)}
-      >
-        {label}
-      </ActionButton>
+      {icon ? (
+        <ActionButton
+          variant="muted"
+          fit="icon"
+          className="border-[#E0DDD5] text-[#5C5C56] hover:bg-[#F7F5F0] hover:text-[#1A1A18]"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label={label}
+          title={label}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </ActionButton>
+      ) : (
+        <ActionButton
+          variant="muted"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label={label}
+          title={label}
+          onClick={() => setOpen((current) => !current)}
+        >
+          {label}
+        </ActionButton>
+      )}
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-[10.5rem] rounded-lg border border-[#E0DDD5] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,.12)]"
+          className="absolute right-0 z-20 mt-1 min-w-[11rem] rounded-lg border border-[#E0DDD5] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,.12)]"
         >
           <div className="flex flex-col gap-0.5" onClick={() => setOpen(false)}>
             {children}
@@ -230,21 +274,33 @@ export function SelectField({ label, error, children, className = '', id, ...pro
 export function Badge({
   children,
   tone = 'green',
+  variant = 'solid',
 }: {
   children: ReactNode;
   tone?: 'green' | 'orange' | 'navy' | 'muted' | 'red' | 'amber';
+  variant?: 'solid' | 'soft';
 }) {
-  const colors = {
-    green: 'bg-[#1A7A4A]',
-    orange: 'bg-[#E8621A]',
-    navy: 'bg-[#1B3A6B]',
-    muted: 'bg-[#8A8A84]',
-    red: 'bg-[#C00000]',
-    amber: 'bg-[#D97706]',
+  const solid = {
+    green: 'bg-[#1A7A4A] text-white',
+    orange: 'bg-[#E8621A] text-white',
+    navy: 'bg-[#1B3A6B] text-white',
+    muted: 'bg-[#8A8A84] text-white',
+    red: 'bg-[#C00000] text-white',
+    amber: 'bg-[#D97706] text-white',
+  }[tone];
+  const soft = {
+    green: 'bg-[#E6F4EC] text-[#0D4F2E]',
+    orange: 'bg-[#FFF1E9] text-[#B44510]',
+    navy: 'bg-[#E8EEF6] text-[#1B3A6B]',
+    muted: 'bg-[#F3F2EF] text-[#5C5C56]',
+    red: 'bg-[#FDECEC] text-[#A00000]',
+    amber: 'bg-[#FEF3C7] text-[#92400E]',
   }[tone];
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[.05em] text-white ${colors}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] tracking-[.04em] ${
+        variant === 'soft' ? `font-semibold ${soft}` : `font-bold ${solid}`
+      }`}
     >
       {children}
     </span>
@@ -321,11 +377,20 @@ export function Modal({
   );
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
   return (
-    <div className="rounded-xl border border-dashed border-[#E0DDD5] bg-white px-6 py-12 text-center">
-      <p className="font-medium text-[#1A1A18]">{title}</p>
-      {hint ? <p className="mt-1 text-sm text-[#8A8A84]">{hint}</p> : null}
+    <div className="rounded-xl border border-dashed border-[#E0DDD5] bg-white px-8 py-16 text-center">
+      <p className="text-[15px] font-medium text-[#1A1A18]">{title}</p>
+      {hint ? <p className="mx-auto mt-1.5 max-w-sm text-sm leading-5 text-[#8A8A84]">{hint}</p> : null}
+      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
     </div>
   );
 }
@@ -359,11 +424,15 @@ export function StatCard({
   value,
   sub,
   color = 'green',
+  compact = false,
+  icon,
 }: {
   label: string;
   value: ReactNode;
   sub?: string;
   color?: 'green' | 'orange' | 'navy' | 'mint';
+  compact?: boolean;
+  icon?: ReactNode;
 }) {
   const accent = {
     green: 'border-t-[#1A7A4A]',
@@ -371,6 +440,34 @@ export function StatCard({
     navy: 'border-t-[#1B3A6B]',
     mint: 'border-t-[#2E9E62]',
   }[color];
+  const iconTone = {
+    green: 'bg-[#E6F4EC] text-[#1A7A4A]',
+    orange: 'bg-[#FFF1E9] text-[#E8621A]',
+    navy: 'bg-[#E8EEF6] text-[#1B3A6B]',
+    mint: 'bg-[#E6F4EC] text-[#2E9E62]',
+  }[color];
+
+  if (compact) {
+    return (
+      <div className="flex h-full min-h-[4.75rem] items-start gap-3 rounded-xl border border-[#E8E6E0] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
+        {icon ? (
+          <span
+            className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconTone}`}
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase tracking-[.06em] text-[#8A8A84]">{label}</div>
+          <div className="mt-1 font-serif text-[22px] font-bold leading-none tracking-tight text-[#1A1A18]">
+            {value}
+          </div>
+          {sub ? <div className="mt-1 text-[11px] text-[#8A8A84]">{sub}</div> : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`rounded-xl border border-[#E0DDD5] border-t-[3px] bg-white px-[18px] py-4 ${accent}`}>

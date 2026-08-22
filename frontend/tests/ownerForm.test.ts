@@ -291,7 +291,7 @@ describe('Franchise owner creation dialog', () => {
 
   it('preserves launch progress, offline payment, and payment history UI', () => {
     assert.equal(franchisesPage.includes('LaunchProgressCompact'), true);
-    assert.equal(franchisesPage.includes('LaunchProgressDots'), true);
+    assert.equal(franchisesPage.includes('showCount'), true);
     assert.equal(franchisesPage.includes('RecordOfflinePaymentDialog'), false);
     assert.equal(franchisesPage.includes('PaymentHistorySection'), false);
   });

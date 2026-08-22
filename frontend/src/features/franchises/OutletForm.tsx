@@ -309,11 +309,12 @@ export function OutletForm({
 
       {isCreate ? (
         <>
-          <div className="mb-3 mt-1 border-t border-[#E0DDD5] pt-3">
+          <div className="mb-3 mt-1 rounded-xl border border-[#E0DDD5] bg-[#FDFAF4] px-4 py-3">
             <h3 className="text-sm font-semibold text-[#1A1A18]">Outlet owner</h3>
             <p className="mt-1 text-xs text-[#8A8A84]">
-              This creates the outlet and its owner together. A secure password setup invite is
-              emailed. Passwords are never stored in profiles or shown here.
+              Outlet and Owner will be created together. This creates the outlet and its owner together.
+              A secure password setup invite is emailed. Passwords are never stored in profiles or
+              shown here.
             </p>
           </div>
           <Field

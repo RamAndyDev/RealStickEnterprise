@@ -113,6 +113,17 @@ describe('deriveLaunchProgress', () => {
     const labels = progress('SETUP').stages.map((stage) => stage.label);
     assert.deepEqual(labels, ['Franchise Created', 'Payment Received', 'Ready to Launch']);
   });
+
+  it('can show a compact completed count in list views without changing stage logic', () => {
+    const compact = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../src/features/franchises/LaunchProgress.tsx'),
+      'utf8',
+    );
+    assert.equal(compact.includes('showCount'), true);
+    assert.equal(compact.includes('completedCount} / ${progress.totalCount}'), true);
+    assert.equal(compact.includes('whitespace-nowrap'), true);
+    assert.equal(compact.includes("deriveLaunchProgress(source)"), true);
+  });
 });
 
 describe('Franchise Detail hidden sections', () => {

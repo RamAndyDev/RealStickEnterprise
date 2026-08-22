@@ -131,24 +131,40 @@ export function LaunchProgressTrack({ source }: { source: LaunchProgressSource }
 export function LaunchProgressCompact({
   source,
   showShortLabel = false,
+  showCount = false,
 }: {
   source: LaunchProgressSource;
   showShortLabel?: boolean;
+  showCount?: boolean;
 }) {
   const progress = deriveLaunchProgress(source);
-  const label = showShortLabel ? progress.currentShortLabel : progress.currentLabel;
+  const label = showCount
+    ? `${progress.completedCount} / ${progress.totalCount}`
+    : showShortLabel
+      ? progress.currentShortLabel
+      : progress.currentLabel;
+  const title = `${progress.completedCount} of ${progress.totalCount} complete — ${progress.currentLabel}`;
 
   return (
-    <div className="min-w-[6.5rem]" title={progress.currentLabel}>
+    <div className="inline-flex items-center gap-2 whitespace-nowrap" title={title}>
       <LaunchProgressDots progress={progress} />
-      <div className="mt-1 text-xs font-medium text-[#1A1A18]">{label}</div>
+      <span
+        className={`shrink-0 whitespace-nowrap text-xs tabular-nums ${
+          showCount ? 'font-medium text-[#5C5C56]' : 'font-medium text-[#1A1A18]'
+        }`}
+      >
+        {label}
+      </span>
     </div>
   );
 }
 
 export function LaunchProgressDots({ progress }: { progress: DerivedLaunchProgress }) {
   return (
-    <div className="flex items-center gap-1" aria-label={`Launch: ${progress.currentLabel}`}>
+    <div
+      className="inline-flex shrink-0 items-center gap-1.5"
+      aria-label={`Launch: ${progress.currentLabel}`}
+    >
       {progress.stages.map((stage) => (
         <span
           key={stage.key}

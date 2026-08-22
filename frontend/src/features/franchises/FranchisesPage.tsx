@@ -1,21 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { CircleCheck, CircleMinus, MapPin, Store, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
   ActionButton,
   ActionMenu,
+  ActionMenuItem,
+  ActionMenuSeparator,
   ActionSelect,
   ActionsTd,
   ActionsTh,
+  AdminListCard,
   Badge,
   Button,
   EmptyState,
   ErrorBanner,
   Field,
-  LoadingBlock,
+  FilterSelect,
+  ListToolbar,
   Modal,
+  PageHeader,
+  StatCard,
   SuccessBanner,
+  TableSkeleton,
 } from '../../components/ui';
 import {
   createFranchise,
@@ -39,9 +47,9 @@ import {
   type OutletFormValues,
 } from './OutletForm';
 import { FranchiseAuditSettings } from './FranchiseAuditSettings';
-import { LaunchProgressCompact, LaunchProgressDots } from './LaunchProgress';
-import { deriveLaunchProgress } from './launchStages';
-import { apiErrorMessage, formatDate, statusLabel, statusTone } from './status';
+import { LaunchProgressCompact } from './LaunchProgress';
+import { franchiseLocationLine, franchiseSummaryCounts } from './franchiseListPresentation';
+import { apiErrorMessage, statusLabel, statusTone } from './status';
 import {
   applyOwnerCreateResult,
   classifyOwnerCreateError,
@@ -55,6 +63,14 @@ import {
   DELETE_FRANCHISE_TITLE,
   applyDeleteFranchiseResult,
 } from './deleteFranchise';
+import { paymentStateLabel, paymentStatusTone } from './offlinePayment';
+
+function launchSource(item: Franchise) {
+  return {
+    status: item.status,
+    payment_status: item.payment_status,
+  };
+}
 
 export function FranchisesPage() {
   const navigate = useNavigate();
@@ -217,278 +233,297 @@ export function FranchisesPage() {
   }
 
   const items = listQuery.data?.items ?? [];
-  const activeCount = items.filter((item) => item.status === 'ACTIVE').length;
+  const summary = useMemo(() => franchiseSummaryCounts(items), [items]);
+
+  function moreMenu(item: Franchise, includeStatus: boolean) {
+    return (
+      <ActionMenu label={`More actions for ${item.name}`}>
+        <ActionMenuItem onClick={() => setEditTarget(item)}>Edit</ActionMenuItem>
+        <ActionButton variant="muted" className="h-auto min-w-0 w-full justify-start border-0 bg-transparent px-3 py-2 text-left text-[13px] font-medium text-[#1A1A18] shadow-none hover:bg-[#F7F5F0]" onClick={() => resetOwnerForm(item)}>
+          Create Owner
+        </ActionButton>
+        {includeStatus
+          ? FRANCHISE_STATUSES.filter((status) => status !== item.status).map((status) => (
+              <ActionMenuItem
+                key={status}
+                onClick={() => setStatusTarget({ franchise: item, next: status })}
+              >
+                {statusLabel(status)}
+              </ActionMenuItem>
+            ))
+          : null}
+        <ActionMenuSeparator />
+        <ActionMenuItem
+          destructive
+          onClick={() => {
+            setDeleteError(null);
+            setDeleteTarget(item);
+          }}
+        >
+          Delete
+        </ActionMenuItem>
+      </ActionMenu>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1A1A18]">Franchise Outlets</h1>
-          <p className="text-xs text-[#8A8A84]">
-            {listQuery.isLoading ? 'Loading…' : `${activeCount} active`}
-          </p>
-        </div>
-        <Button onClick={() => setShowAdd(true)}>+ Add Outlet</Button>
-      </div>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        title="Franchise Management"
+        description="Manage franchise outlets, owners, launch progress and payments."
+        action={<Button onClick={() => setShowAdd(true)}>+ Add Outlet</Button>}
+      />
 
       <FranchiseAuditSettings />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_220px]">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search outlets by name, city, code, or owner email"
-          className="w-full rounded-lg border border-[#E0DDD5] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1A7A4A]"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as FranchiseStatus | '')}
-          className="w-full rounded-lg border border-[#E0DDD5] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1A7A4A]"
-        >
-          <option value="">All statuses</option>
-          {FRANCHISE_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {statusLabel(status)}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!listQuery.isError ? (
+        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            compact
+            label="Total Outlets"
+            value={listQuery.isLoading ? '—' : summary.total}
+            color="navy"
+            icon={<Store className="h-4 w-4" />}
+          />
+          <StatCard
+            compact
+            label="Active"
+            value={listQuery.isLoading ? '—' : summary.active}
+            color="green"
+            icon={<CircleCheck className="h-4 w-4" />}
+          />
+          <StatCard
+            compact
+            label="Inactive"
+            value={listQuery.isLoading ? '—' : summary.inactive}
+            color="orange"
+            icon={<CircleMinus className="h-4 w-4" />}
+          />
+          <StatCard
+            compact
+            label="Unassigned Owner"
+            value={listQuery.isLoading ? '—' : summary.unassigned}
+            color="mint"
+            icon={<UserRound className="h-4 w-4" />}
+          />
+        </div>
+      ) : null}
+
+      <ListToolbar
+        search={search}
+        searchPlaceholder="Search outlets by name, city, code, or owner email"
+        onSearchChange={setSearch}
+        filters={
+          <FilterSelect
+            value={statusFilter}
+            aria-label="Filter by status"
+            onChange={(e) => setStatusFilter(e.target.value as FranchiseStatus | '')}
+          >
+            <option value="">All statuses</option>
+            {FRANCHISE_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {statusLabel(status)}
+              </option>
+            ))}
+          </FilterSelect>
+        }
+      />
 
       {feedback ? (
-        <div className="mb-3">
+        <div className="mb-4">
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
       {error && !ownerTarget && !showAdd && !deleteTarget ? (
-        <div className="mb-3">
+        <div className="mb-4">
           <ErrorBanner message={error} />
         </div>
       ) : null}
 
-      {listQuery.isLoading ? <LoadingBlock label="Loading franchise outlets…" /> : null}
+      {listQuery.isLoading ? <TableSkeleton /> : null}
       {listQuery.isError ? (
         <ErrorBanner message={apiErrorMessage(listQuery.error, 'Unable to load outlets.')} />
       ) : null}
 
       {!listQuery.isLoading && !listQuery.isError && items.length === 0 ? (
         <EmptyState
-          title="No outlets yet"
-          hint="Add the first outlet to begin franchise management."
+          title="No franchises found"
+          hint="Try changing your search or add a new outlet."
+          action={<Button onClick={() => setShowAdd(true)}>+ Add Outlet</Button>}
         />
       ) : null}
 
       {!listQuery.isLoading && items.length > 0 ? (
         <>
-          <div className="hidden overflow-x-auto rounded-xl border border-[#E0DDD5] bg-white md:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-[#E8E6E0] bg-white shadow-[0_1px_2px_rgba(0,0,0,.04)] lg:block">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
+              <thead className="border-b border-[#E8E6E0] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Outlet</th>
-                  <th className="px-4 py-3 font-semibold">Owner</th>
-                  <th className="px-4 py-3 font-semibold">Contact</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Launch</th>
-                  <th className="px-4 py-3 font-semibold">Payment</th>
-                  <ActionsTh />
+                  <th className="w-[22%] px-5 py-3 font-semibold">Outlet</th>
+                  <th className="w-[18%] px-5 py-3 font-semibold">Owner</th>
+                  <th className="w-[16%] px-5 py-3 font-semibold">Contact</th>
+                  <th className="w-[10%] px-5 py-3 font-semibold">Status</th>
+                  <th className="w-[14%] min-w-[7.5rem] whitespace-nowrap px-5 py-3 font-semibold">Launch</th>
+                  <th className="w-[10%] px-5 py-3 font-semibold">Payment</th>
+                  <ActionsTh className="px-5" />
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} className="border-b border-[#E0DDD5] last:border-b-0">
-                    <td className="px-4 py-3 align-top">
-                      <Link
-                        to={`/franchises/${item.id}`}
-                        className="font-semibold text-[#1A7A4A] hover:underline"
-                      >
-                        {item.name}
-                      </Link>
-                      <div className="mt-0.5 text-xs text-[#8A8A84]">
-                        {[item.city, item.tier ? `${item.tier} Partner` : null]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="font-medium text-[#1A1A18]">
-                        {item.owner?.full_name ?? 'Unassigned'}
-                      </div>
-                      {item.owner_email ? (
-                        <div className="mt-0.5 text-xs text-[#8A8A84]">{item.owner_email}</div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 align-top text-[#4A4A46]">
-                      {item.owner?.phone || item.owner_email || '—'}
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <LaunchProgressCompact
-                        source={{
-                          status: item.status,
-                          payment_status: item.payment_status,
-                        }}
-                      />
-                    </td>
-                    <td className="px-4 py-3 align-top text-[#4A4A46]">
-                      {item.payment_status ?? '—'}
-                    </td>
-                    <ActionsTd>
-                      <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
-                        Edit
-                      </ActionButton>
-                      <ActionSelect
-                        value=""
-                        aria-label={`Change status for ${item.name}`}
-                        onChange={(e) => {
-                          const next = e.target.value as FranchiseStatus;
-                          if (!next) return;
-                          setStatusTarget({ franchise: item, next });
-                        }}
-                      >
-                        <option value="">
-                          {item.status === 'ACTIVE' ? 'Deactivate…' : 'Activate…'}
-                        </option>
-                        {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
-                          <option key={status} value={status}>
-                            {statusLabel(status)}
-                          </option>
-                        ))}
-                      </ActionSelect>
-                      <ActionMenu>
-                        <ActionButton variant="outline" onClick={() => resetOwnerForm(item)}>
-                          Create Owner
-                        </ActionButton>
+                {items.map((item) => {
+                  const location = franchiseLocationLine(item);
+                  return (
+                    <tr
+                      key={item.id}
+                      className="border-b border-[#F0EEE8] last:border-b-0 hover:bg-[#FDFAF4]"
+                    >
+                      <td className="px-5 py-4 align-middle">
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F7F5F0] text-[#8A8A84]">
+                            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
+                          <div className="min-w-0">
+                            <Link
+                              to={`/franchises/${item.id}`}
+                              className="text-[14px] font-semibold text-[#1A1A18] hover:text-[#1A7A4A]"
+                            >
+                              {item.name}
+                            </Link>
+                            {location ? (
+                              <div className="mt-0.5 text-xs text-[#8A8A84]">{location}</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        {item.owner?.full_name ? (
+                          <>
+                            <div className="text-[13px] text-[#1A1A18]">{item.owner.full_name}</div>
+                            {item.owner_email || item.owner?.email ? (
+                              <div className="mt-0.5 text-xs text-[#8A8A84]">
+                                {item.owner_email || item.owner?.email}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <Badge variant="soft" tone="muted">
+                              {item.owner?.full_name ?? 'Unassigned'}
+                            </Badge>
+                            {item.owner_email ? (
+                              <div className="mt-1 text-xs text-[#8A8A84]">{item.owner_email}</div>
+                            ) : null}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 align-middle text-[13px] text-[#5C5C56]">
+                        {item.owner?.phone || item.owner_email || '—'}
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        <Badge variant="soft" tone={statusTone(item.status)}>
+                          {statusLabel(item.status)}
+                        </Badge>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 align-middle">
+                        <LaunchProgressCompact source={launchSource(item)} showCount />
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        <Badge variant="soft" tone={paymentStatusTone(item.payment_status)}>
+                          {paymentStateLabel(item.payment_status)}
+                        </Badge>
+                      </td>
+                      <ActionsTd className="px-5 py-4">
                         <ActionButton
-                          variant="danger"
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeleteTarget(item);
-                          }}
-                        >
-                          Delete
-                        </ActionButton>
-                        <ActionButton
-                          variant="muted"
+                          variant="outline"
                           onClick={() => navigate(`/franchises/${item.id}`)}
                         >
                           View
                         </ActionButton>
-                      </ActionMenu>
-                    </ActionsTd>
-                  </tr>
-                ))}
+                        <ActionSelect
+                          value=""
+                          aria-label={`Change status for ${item.name}`}
+                          onChange={(e) => {
+                            const next = e.target.value as FranchiseStatus;
+                            if (!next) return;
+                            setStatusTarget({ franchise: item, next });
+                          }}
+                        >
+                          <option value="">
+                            {item.status === 'ACTIVE' ? 'Deactivate…' : 'Activate…'}
+                          </option>
+                          {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
+                            <option key={status} value={status}>
+                              {statusLabel(status)}
+                            </option>
+                          ))}
+                        </ActionSelect>
+                        {moreMenu(item, false)}
+                      </ActionsTd>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          <div className="grid gap-3 md:hidden">
+          <div className="grid gap-3 lg:hidden">
             {items.map((item) => {
-              const launch = deriveLaunchProgress({
-                status: item.status,
-                payment_status: item.payment_status,
-              });
+              const location = franchiseLocationLine(item);
               return (
-                <article
-                  key={`card-${item.id}`}
-                  className="overflow-hidden rounded-[10px] border border-[#E0DDD5] bg-white"
-                >
-                  <div
-                    className="px-4 py-3"
-                    style={{
-                      background: item.status === 'ACTIVE' ? '#0D4F2E' : '#8A8A84',
-                    }}
-                  >
-                    <Link
-                      to={`/franchises/${item.id}`}
-                      className="text-[15px] font-bold text-white hover:underline"
+                <AdminListCard key={`card-${item.id}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        to={`/franchises/${item.id}`}
+                        className="text-[15px] font-semibold text-[#1A1A18] hover:text-[#1A7A4A]"
+                      >
+                        {item.name}
+                      </Link>
+                      {location ? <div className="mt-0.5 text-xs text-[#8A8A84]">{location}</div> : null}
+                    </div>
+                    <Badge variant="soft" tone={statusTone(item.status)}>
+                      {statusLabel(item.status)}
+                    </Badge>
+                  </div>
+
+                  <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-[#F0EEE8] pt-3 text-sm">
+                    <div>
+                      <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                        Owner
+                      </dt>
+                      <dd className="mt-1 text-[13px] text-[#1A1A18]">
+                        {item.owner?.full_name ?? 'Unassigned'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                        Payment
+                      </dt>
+                      <dd className="mt-1">
+                        <Badge variant="soft" tone={paymentStatusTone(item.payment_status)}>
+                          {paymentStateLabel(item.payment_status)}
+                        </Badge>
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                        Launch
+                      </dt>
+                      <dd className="mt-1 whitespace-nowrap">
+                        <LaunchProgressCompact source={launchSource(item)} showCount />
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-4 flex items-center gap-1.5 border-t border-[#F0EEE8] pt-3">
+                    <ActionButton
+                      variant="outline"
+                      onClick={() => navigate(`/franchises/${item.id}`)}
                     >
-                      {item.name}
-                    </Link>
-                    <div className="mt-0.5 text-[11px] text-white/70">
-                      {item.city || '—'}
-                      {item.tier ? ` · ${item.tier} Partner` : ''}
-                    </div>
+                      View
+                    </ActionButton>
+                    {moreMenu(item, true)}
                   </div>
-                  <div className="space-y-3 px-4 py-3">
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
-                          Owner
-                        </div>
-                        <div className="mt-0.5 font-medium">
-                          {item.owner?.full_name ?? 'Unassigned'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
-                          Contact
-                        </div>
-                        <div className="mt-0.5">{item.owner?.phone || item.owner_email || '—'}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
-                          Status
-                        </div>
-                        <div className="mt-1">
-                          <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
-                          Payment
-                        </div>
-                        <div className="mt-0.5">{item.payment_status ?? '—'}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between rounded-md bg-[#FDFAF4] px-3 py-2">
-                      <LaunchProgressDots progress={launch} />
-                      <div className="text-right">
-                        <div className="font-serif text-sm font-bold text-[#E8621A]">
-                          {launch.currentShortLabel}
-                        </div>
-                        <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">
-                          Launch
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
-                        Edit
-                      </ActionButton>
-                      <ActionSelect
-                        value=""
-                        aria-label={`Change status for ${item.name}`}
-                        onChange={(e) => {
-                          const next = e.target.value as FranchiseStatus;
-                          if (!next) return;
-                          setStatusTarget({ franchise: item, next });
-                        }}
-                      >
-                        <option value="">
-                          {item.status === 'ACTIVE' ? 'Deactivate…' : 'Activate…'}
-                        </option>
-                        {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
-                          <option key={status} value={status}>
-                            {statusLabel(status)}
-                          </option>
-                        ))}
-                      </ActionSelect>
-                      <ActionButton variant="outline" onClick={() => resetOwnerForm(item)}>
-                        Create Owner
-                      </ActionButton>
-                      <ActionButton
-                        variant="danger"
-                        onClick={() => {
-                          setDeleteError(null);
-                          setDeleteTarget(item);
-                        }}
-                      >
-                        Delete
-                      </ActionButton>
-                    </div>
-                  </div>
-                </article>
+                </AdminListCard>
               );
             })}
           </div>

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { Badge, ErrorBanner, LoadingBlock, SuccessBanner } from '../../components/ui';
+import { Badge, ErrorBanner, SuccessBanner } from '../../components/ui';
 import { fetchFranchiseAuditSetting, updateFranchiseAuditSetting } from '../../lib/settingsApi';
 import {
   FRANCHISE_AUDIT_SETTING_COPY,
@@ -50,45 +50,53 @@ export function FranchiseAuditSettings() {
   }
 
   return (
-    <section className="mb-6 rounded-xl border border-[#E0DDD5] bg-white p-5">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-lg font-bold text-[#1A1A18]">
-            {FRANCHISE_AUDIT_SETTING_COPY.heading}
-          </h2>
-          <p className="mt-1 text-xs text-[#8A8A84]">{FRANCHISE_AUDIT_SETTING_COPY.description}</p>
+    <section className="mb-6 rounded-lg border border-[#E8E6E0] bg-white px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[13px] font-medium text-[#1A1A18]">
+              {FRANCHISE_AUDIT_SETTING_COPY.heading}
+            </h2>
+            {settingQuery.isSuccess ? (
+              <Badge variant="soft" tone={displayed ? 'green' : 'muted'}>
+                {franchiseAuditSettingStateLabel(displayed)}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-xs text-[#8A8A84]">{FRANCHISE_AUDIT_SETTING_COPY.description}</p>
         </div>
+
         {settingQuery.isSuccess ? (
-          <Badge tone={displayed ? 'green' : 'muted'}>{franchiseAuditSettingStateLabel(displayed)}</Badge>
+          <label className="flex items-center gap-2 text-[13px] text-[#4A4A46]">
+            <input
+              type="checkbox"
+              checked={displayed}
+              disabled={saveMutation.isPending}
+              onChange={(event) => onToggle(event.target.checked)}
+            />
+            {FRANCHISE_AUDIT_SETTING_COPY.label}
+          </label>
         ) : null}
       </div>
 
       {feedback ? (
-        <div className="mb-3">
+        <div className="mt-3">
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
       {error ? (
-        <div className="mb-3">
+        <div className="mt-3">
           <ErrorBanner message={error} />
         </div>
       ) : null}
 
-      {settingQuery.isLoading ? <LoadingBlock label="Loading Franchise Audit access…" /> : null}
-      {settingQuery.isError ? (
-        <ErrorBanner message={FRANCHISE_AUDIT_SETTING_COPY.loadError} />
+      {settingQuery.isLoading ? (
+        <p className="mt-2 text-xs text-[#8A8A84]">Loading Franchise Audit access…</p>
       ) : null}
-
-      {settingQuery.isSuccess ? (
-        <label className="flex items-center gap-2 text-sm text-[#1A1A18]">
-          <input
-            type="checkbox"
-            checked={displayed}
-            disabled={saveMutation.isPending}
-            onChange={(event) => onToggle(event.target.checked)}
-          />
-          {FRANCHISE_AUDIT_SETTING_COPY.label}
-        </label>
+      {settingQuery.isError ? (
+        <div className="mt-3">
+          <ErrorBanner message={FRANCHISE_AUDIT_SETTING_COPY.loadError} />
+        </div>
       ) : null}
     </section>
   );

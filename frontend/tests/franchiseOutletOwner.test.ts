@@ -34,7 +34,7 @@ describe('Franchise Management owner action labels', () => {
       franchisesPage,
       /resetOwnerForm\(item\)\}>\s*Create Owner\s*<\/ActionButton>/,
     );
-    assert.equal(franchisesPage.includes('<ActionMenu>'), true);
+    assert.equal(franchisesPage.includes('<ActionMenu'), true);
     assert.equal(franchisesPage.includes('Create Owner'), true);
   });
 

@@ -52,6 +52,10 @@ export async function updateFranchiseStatus(
   return data;
 }
 
+export async function deleteFranchise(id: string): Promise<void> {
+  await api.delete(`/admin/franchises/${id}`);
+}
+
 export async function assignFranchiseOwner(
   id: string,
   body: { owner_profile_id?: string; owner_email?: string },

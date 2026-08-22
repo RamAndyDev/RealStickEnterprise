@@ -34,6 +34,7 @@ describe('Franchise Management owner action labels', () => {
       franchisesPage,
       /resetOwnerForm\(item\)\}>\s*Create Owner\s*<\/ActionButton>/,
     );
+    assert.equal(franchisesPage.includes('<ActionMenu>'), true);
     assert.equal(franchisesPage.includes('Create Owner'), true);
   });
 
@@ -113,7 +114,7 @@ describe('Add Outlet duplicate owner email', () => {
     assert.equal(addModal.includes('formError={createError}'), true);
     assert.equal(addModal.includes('apiFieldErrors={createFieldErrors}'), true);
     assert.equal(outletForm.includes('error={ownerEmailError}'), true);
-    assert.equal(franchisesPage.includes('{error && !ownerTarget && !showAdd ? ('), true);
+    assert.equal(franchisesPage.includes('{error && !ownerTarget && !showAdd && !deleteTarget ? ('), true);
   });
 
   it('does not leave a partial outlet to retry against; retry is a fresh single create', () => {
@@ -146,7 +147,7 @@ describe('Add Outlet dialog error handling', () => {
     assert.equal(errorBlock.includes('setError('), false);
     assert.equal(errorBlock.includes('setShowAdd(false)'), false);
     assert.equal(outletForm.includes('<ErrorBanner message={formError} />'), true);
-    assert.equal(franchisesPage.includes('{error && !ownerTarget && !showAdd ? ('), true);
+    assert.equal(franchisesPage.includes('{error && !ownerTarget && !showAdd && !deleteTarget ? ('), true);
   });
 
   it('closes the dialog and refreshes the franchise list after a successful create', () => {

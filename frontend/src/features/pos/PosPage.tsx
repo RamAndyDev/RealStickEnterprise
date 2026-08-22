@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ErrorBanner, LoadingBlock } from '../../components/ui';
+import { validatePhone } from '../../lib/validation';
 import { fetchPosMenu, fetchPosOffers, completePosOrder } from '../../lib/posApi';
 import { categoryColor } from '../products/categoryColors';
 import { ProductImage } from '../products/ProductImage';
@@ -121,6 +122,11 @@ export function PosPage() {
 
   function confirmCheckout() {
     setCheckoutError(null);
+    const phoneError = validatePhone(phone, false);
+    if (phoneError) {
+      setCheckoutError(phoneError);
+      return;
+    }
     checkoutMutation.mutate({
       items: cart.map((line) => ({ product_id: line.product_id, quantity: line.quantity })),
       payment_method: paymentMethod,

@@ -17,6 +17,7 @@ import {
 import { listFranchises } from '../../lib/franchisesApi';
 import { createPromotion, listPromotions, updatePromotion } from '../../lib/settingsApi';
 import type { Promotion, PromotionWritePayload } from '../../types/settings';
+import { validateDateRange, validateRequiredText } from '../../lib/validation';
 import { apiErrorMessage, formatDate } from '../franchises/status';
 
 type FormValues = {
@@ -58,6 +59,7 @@ export function PromotionsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Promotion | null>(null);
   const [form, setForm] = useState<FormValues>(emptyForm());
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -230,7 +232,13 @@ export function PromotionsPage() {
               <ErrorBanner message={error} />
             </div>
           ) : null}
-          <Field label="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Field
+            label="Name"
+            required
+            value={form.name}
+            error={formErrors.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
           <Field
             label="Description"
             value={form.description}
@@ -240,18 +248,21 @@ export function PromotionsPage() {
             label="Promo code"
             required
             value={form.promo_code}
+            error={formErrors.promo_code}
             onChange={(e) => setForm({ ...form, promo_code: e.target.value })}
           />
           <Field
             label="Valid from"
             type="date"
             value={form.valid_from}
+            error={formErrors.valid_from}
             onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
           />
           <Field
             label="Valid to"
             type="date"
             value={form.valid_to}
+            error={formErrors.valid_to}
             onChange={(e) => setForm({ ...form, valid_to: e.target.value })}
           />
           <fieldset className="mb-3">
@@ -299,6 +310,16 @@ export function PromotionsPage() {
             <Button
               disabled={createMutation.isPending || updateMutation.isPending}
               onClick={() => {
+                const errors: Record<string, string> = {};
+                const nameError = validateRequiredText(form.name, 'Name is required.');
+                const codeError = validateRequiredText(form.promo_code, 'Promo code is required.');
+                if (nameError) errors.name = nameError;
+                if (codeError) errors.promo_code = codeError;
+                const range = validateDateRange(form.valid_from, form.valid_to);
+                if (range.start) errors.valid_from = range.start;
+                if (range.end) errors.valid_to = range.end;
+                setFormErrors(errors);
+                if (Object.keys(errors).length) return;
                 if (editTarget) {
                   updateMutation.mutate({ id: editTarget.id, payload: toPayload(form) });
                 } else {

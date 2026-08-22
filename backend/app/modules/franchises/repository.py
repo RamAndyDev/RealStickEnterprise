@@ -92,11 +92,56 @@ class FranchiseRepository:
 
     def delete_new_franchise(self, franchise_id: UUID) -> None:
         """Remove a just-created franchise and its seeded checklist (FK children first)."""
-        self._db.table('launch_checklist_items').delete().eq(
-            'franchise_id',
-            str(franchise_id),
-        ).execute()
-        self._db.table('franchises').delete().eq('id', str(franchise_id)).execute()
+        self.delete_franchise(franchise_id)
+
+    def delete_franchise(self, franchise_id: UUID) -> bool:
+        """Hard-delete a franchise after removing seeded launch-checklist rows only."""
+        fid = str(franchise_id)
+        self._db.table('launch_checklist_items').delete().eq('franchise_id', fid).execute()
+        response = self._db.table('franchises').delete().eq('id', fid).execute()
+        return bool(response.data)
+
+    def franchise_has_business_references(self, franchise_id: UUID) -> bool:
+        """True when any business/historical row still points at this franchise.
+
+        launch_checklist_items are seeded operational setup rows and are not
+        treated as blocking historical records.
+        """
+        fid = str(franchise_id)
+        checks: tuple[tuple[str, str], ...] = (
+            ('profiles', 'franchise_id'),
+            ('franchise_payments', 'franchise_id'),
+            ('orders', 'franchise_id'),
+            ('franchise_product_prices', 'franchise_id'),
+            ('inventory_movements', 'franchise_id'),
+            ('franchise_ingredient_stock', 'franchise_id'),
+            ('discounts', 'franchise_id'),
+            ('coupons', 'franchise_id'),
+            ('promotion_franchises', 'franchise_id'),
+            ('franchise_audits', 'franchise_id'),
+            ('quality_audits', 'franchise_id'),
+            ('gallery_items', 'franchise_id'),
+            ('franchise_applications', 'converted_franchise_id'),
+        )
+        return any(self._row_exists(table, column, fid) for table, column in checks)
+
+    def _row_exists(self, table: str, column: str, value: str) -> bool:
+        response = (
+            self._db.table(table)
+            .select('id')
+            .eq(column, value)
+            .limit(1)
+            .execute()
+        )
+        return bool(response.data)
+
+    @staticmethod
+    def is_foreign_key_violation(exc: Exception) -> bool:
+        if isinstance(exc, APIError):
+            code = getattr(exc, 'code', None) or ''
+            message = str(exc).lower()
+            return code == '23503' or 'foreign key' in message
+        return 'foreign key' in str(exc).lower()
 
     def update_franchise(self, franchise_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
         response = (

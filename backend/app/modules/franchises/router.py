@@ -87,6 +87,15 @@ def update_franchise_status(
     return service.update_status(franchise_id, body)
 
 
+@router.delete('/franchises/{franchise_id}', status_code=204)
+def delete_franchise(
+    franchise_id: UUID,
+    _: SystemAdmin,
+    service: FranchiseService = Depends(get_franchise_service),
+) -> None:
+    service.delete_franchise(franchise_id)
+
+
 @router.patch('/franchises/{franchise_id}/owner', response_model=FranchiseDetail)
 def assign_franchise_owner(
     franchise_id: UUID,

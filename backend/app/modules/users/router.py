@@ -77,6 +77,15 @@ def update_user(
     return service.update_user(user_id, body, profile)
 
 
+@admin_router.delete('/users/{user_id}', status_code=204)
+def delete_user(
+    user_id: UUID,
+    profile: SystemAdmin,
+    service: UsersService = Depends(get_users_service),
+) -> None:
+    service.delete_user(user_id, profile)
+
+
 @admin_router.post('/users/{user_id}/reset-password', response_model=PasswordResetResponse)
 def reset_user_password(
     user_id: UUID,

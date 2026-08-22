@@ -719,3 +719,118 @@ def test_inactive_user_remains_in_database(client, auth_header_factory, fake_db)
     )
     match = next(item for item in listed.json()['items'] if item['id'] == str(EMPLOYEE_ID))
     assert match['is_active'] is False
+
+
+# --- User delete ---
+
+
+def _create_unused_admin(client, auth_header_factory, email: str = 'spare.admin@realstick.in'):
+    response = client.post(
+        '/api/v1/admin/users',
+        headers=_admin(auth_header_factory),
+        json={
+            'full_name': 'Spare Admin',
+            'email': email,
+            'role': 'SYSTEM_ADMIN',
+        },
+    )
+    assert response.status_code == 201
+    return response.json()['user']
+
+
+def test_admin_can_delete_unreferenced_user(client, auth_header_factory, fake_db):
+    created = _create_unused_admin(client, auth_header_factory)
+    user_id = created['id']
+    response = client.delete(f'/api/v1/admin/users/{user_id}', headers=_admin(auth_header_factory))
+    assert response.status_code == 204
+    assert not any(row['id'] == user_id for row in fake_db.tables['profiles'])
+    assert not any(str(user.id) == user_id for user in fake_db.auth.admin._users)
+    missing = client.get(f'/api/v1/admin/users/{user_id}', headers=_admin(auth_header_factory))
+    assert missing.status_code == 404
+
+
+def test_non_admin_cannot_delete_user(client, auth_header_factory):
+    created = _create_unused_admin(client, auth_header_factory, 'locked.admin@realstick.in')
+    for headers in (_owner(auth_header_factory), _employee(auth_header_factory)):
+        response = client.delete(f'/api/v1/admin/users/{created["id"]}', headers=headers)
+        assert response.status_code == 403
+
+
+def test_unknown_user_delete_returns_404(client, auth_header_factory):
+    response = client.delete(f'/api/v1/admin/users/{uuid4()}', headers=_admin(auth_header_factory))
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'User not found'
+
+
+def test_employee_delete_via_admin_returns_404(client, auth_header_factory, fake_db):
+    profiles_before = list(fake_db.tables['profiles'])
+    response = client.delete(
+        f'/api/v1/admin/users/{EMPLOYEE_ID}',
+        headers=_admin(auth_header_factory),
+    )
+    assert response.status_code == 404
+    assert fake_db.tables['profiles'] == profiles_before
+
+
+def test_referenced_user_delete_returns_409(client, auth_header_factory, fake_db):
+    from app.modules.users.schemas import USER_DELETE_BLOCKED_DETAIL
+
+    created = _create_unused_admin(client, auth_header_factory, 'auditor.admin@realstick.in')
+    user_id = created['id']
+    fake_db.tables['launch_checklist_items'].append(
+        {
+            'id': str(uuid4()),
+            'franchise_id': str(FRANCHISE_B),
+            'item_key': 'owner_assigned',
+            'item_name': 'Franchise owner assigned',
+            'display_order': 3,
+            'is_completed': True,
+            'completed_by': user_id,
+        }
+    )
+    checklist_before = list(fake_db.tables['launch_checklist_items'])
+    response = client.delete(f'/api/v1/admin/users/{user_id}', headers=_admin(auth_header_factory))
+    assert response.status_code == 409
+    assert response.json()['detail'] == USER_DELETE_BLOCKED_DETAIL
+    assert any(row['id'] == user_id for row in fake_db.tables['profiles'])
+    assert any(str(user.id) == user_id for user in fake_db.auth.admin._users)
+    assert fake_db.tables['launch_checklist_items'] == checklist_before
+    profile = next(row for row in fake_db.tables['profiles'] if row['id'] == user_id)
+    assert profile['is_active'] is True
+
+
+def test_cannot_delete_own_account(client, auth_header_factory, fake_db):
+    from app.modules.users.schemas import SELF_DELETE_DETAIL
+
+    _create_unused_admin(client, auth_header_factory, 'peer.admin@realstick.in')
+    response = client.delete(f'/api/v1/admin/users/{ADMIN_ID}', headers=_admin(auth_header_factory))
+    assert response.status_code == 409
+    assert response.json()['detail'] == SELF_DELETE_DETAIL
+    assert any(row['id'] == str(ADMIN_ID) for row in fake_db.tables['profiles'])
+
+
+def test_cannot_delete_last_active_admin(client, auth_header_factory, fake_db):
+    from app.modules.users.schemas import LAST_ADMIN_DELETE_DETAIL
+
+    response = client.delete(f'/api/v1/admin/users/{ADMIN_ID}', headers=_admin(auth_header_factory))
+    assert response.status_code == 409
+    assert response.json()['detail'] == LAST_ADMIN_DELETE_DETAIL
+    assert any(row['id'] == str(ADMIN_ID) for row in fake_db.tables['profiles'])
+    assert any(str(user.id) == str(ADMIN_ID) for user in fake_db.auth.admin._users)
+
+
+def test_failed_auth_cleanup_restores_profile(client, auth_header_factory, fake_db, monkeypatch):
+    created = _create_unused_admin(client, auth_header_factory, 'rollback.admin@realstick.in')
+    user_id = created['id']
+
+    def fail_auth(_user_id: str) -> None:
+        raise RuntimeError('auth delete failed')
+
+    monkeypatch.setattr(
+        'app.modules.users.repository.UsersRepository.delete_auth_user',
+        fail_auth,
+    )
+    response = client.delete(f'/api/v1/admin/users/{user_id}', headers=_admin(auth_header_factory))
+    assert response.status_code == 503
+    assert any(row['id'] == user_id for row in fake_db.tables['profiles'])
+    assert any(str(user.id) == user_id for user in fake_db.auth.admin._users)

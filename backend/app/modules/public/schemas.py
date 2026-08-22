@@ -4,16 +4,13 @@ from uuid import UUID
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.core.validation import strip_text, validate_email, validate_phone, validate_required_text
 
 
 def _strip_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('value must be a string')
-    stripped = value.strip()
-    return stripped or None
+    return strip_text(value)
 
 
 class PublicCategory(BaseModel):
@@ -65,18 +62,36 @@ ENQUIRY_TYPE_LABELS = {
 class ContactEnquiryRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: str = Field(min_length=1, max_length=20)
-    email: EmailStr
+    email: str
     message: str = Field(min_length=1, max_length=2000)
     enquiry_type: EnquiryType = EnquiryType.GENERAL
     website: str | None = Field(default=None, max_length=200)
 
-    @field_validator('name', 'phone', 'message', mode='before')
+    @field_validator('name', mode='before')
     @classmethod
-    def strip_required(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('This field is required')
-        return stripped
+    def require_name(cls, value: object) -> str:
+        return validate_required_text(value, field_name='Name', max_length=120)
+
+    @field_validator('phone', mode='before')
+    @classmethod
+    def require_phone(cls, value: object) -> str:
+        phone = validate_phone(value, required=True)
+        if not phone:
+            raise ValueError('Phone is required')
+        return phone
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def require_email(cls, value: object) -> str:
+        email = validate_email(value, required=True)
+        if not email:
+            raise ValueError('Email is required')
+        return email
+
+    @field_validator('message', mode='before')
+    @classmethod
+    def require_message(cls, value: object) -> str:
+        return validate_required_text(value, field_name='Message', max_length=2000)
 
     @field_validator('website', mode='before')
     @classmethod

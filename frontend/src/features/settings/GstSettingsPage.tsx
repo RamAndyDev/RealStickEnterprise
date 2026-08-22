@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 
 import { Button, ErrorBanner, Field, LoadingBlock, SuccessBanner } from '../../components/ui';
 import { fetchGstSettings, updateGstSettings } from '../../lib/settingsApi';
+import { validatePercentage } from '../../lib/validation';
 import { apiErrorMessage } from '../franchises/status';
 
 function derivedHalves(rateText: string): { cgst: string; sgst: string; valid: boolean } {
@@ -34,6 +35,7 @@ export function GstSettingsPage() {
   const current = gstQuery.data;
   const rateText = rate ?? (current ? Number(current.rate).toFixed(2) : '');
   const derived = useMemo(() => derivedHalves(rateText), [rateText]);
+  const rateError = validatePercentage(rateText, { allowZero: true, min: 0, max: 40 });
 
   const saveMutation = useMutation({
     mutationFn: () => updateGstSettings(Number.parseFloat(rateText)),
@@ -77,6 +79,7 @@ export function GstSettingsPage() {
           max={40}
           step="0.01"
           value={rateText}
+          error={rateError ?? undefined}
           onChange={(e) => {
             setRate(e.target.value);
             setFeedback(null);
@@ -106,7 +109,7 @@ export function GstSettingsPage() {
 
         <Button
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || !derived.valid}
+          disabled={saveMutation.isPending || !derived.valid || Boolean(rateError)}
         >
           {saveMutation.isPending ? 'Saving…' : 'Save'}
         </Button>

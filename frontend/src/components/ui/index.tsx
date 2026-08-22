@@ -1,5 +1,7 @@
 import {
   useEffect,
+  useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -127,6 +129,51 @@ export function ActionsTd({
 
 export function ActionSelect({ className = '', ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={`${ACTION_SELECT_CLASS} ${className}`} {...props} />;
+}
+
+export function ActionMenu({
+  label = 'More',
+  children,
+}: {
+  label?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <ActionButton
+        variant="muted"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((current) => !current)}
+      >
+        {label}
+      </ActionButton>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-1 min-w-[10.5rem] rounded-lg border border-[#E0DDD5] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,.12)]"
+        >
+          <div className="flex flex-col gap-0.5" onClick={() => setOpen(false)}>
+            {children}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 type FieldProps = InputHTMLAttributes<HTMLInputElement> & {

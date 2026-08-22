@@ -221,7 +221,7 @@ describe('Admin User Management owner creation dialog', () => {
     const errorBlock = createMutation.slice(createMutation.indexOf('onError'));
     assert.equal(errorBlock.includes('setError('), false);
     assert.equal(errorBlock.includes('apiErrorMessage'), false);
-    assert.equal(usersPage.includes('{error && !showAdd ? ('), true);
+    assert.equal(usersPage.includes('{error && !showAdd && !deleteTarget ? ('), true);
     assert.equal(addModal.includes('formError={createError}'), true);
   });
 
@@ -286,7 +286,7 @@ describe('Franchise owner creation dialog', () => {
     assert.equal(successBlock.includes('setFeedback(data.message)'), true);
     assert.equal(errorBlock.includes('setOwnerTarget(null)'), false);
     assert.equal(errorBlock.includes('setError('), false);
-    assert.equal(franchisesPage.includes('{error && !ownerTarget && !showAdd ? ('), true);
+    assert.equal(franchisesPage.includes('{error && !ownerTarget && !showAdd && !deleteTarget ? ('), true);
   });
 
   it('preserves launch progress, offline payment, and payment history UI', () => {

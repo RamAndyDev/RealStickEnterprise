@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 
 import { Button, ErrorBanner, Field, SelectField } from '../../components/ui';
+import { validateIsoDate, validatePhone, validateRequiredText } from '../../lib/validation';
 import {
   FRANCHISE_STATUSES,
   FRANCHISE_TIERS,
@@ -28,8 +29,6 @@ export type OutletFormValues = {
   code: string;
   status: FranchiseStatus;
 };
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function emptyOutletForm(defaults?: Partial<OutletFormValues>): OutletFormValues {
   return {
@@ -76,12 +75,14 @@ export function validateOutletForm(
   }: { requireStatus?: boolean; requireOwner?: boolean } = {},
 ): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (!values.name.trim()) errors.name = 'Outlet name is required';
+  const nameError = validateRequiredText(values.name, 'Outlet name is required');
+  if (nameError) errors.name = nameError;
   if (requireOwner) {
     const ownerErrors = validateOwnerForm(
       {
         full_name: values.owner_full_name,
         email: values.owner_email,
+        phone: values.owner_phone,
         role: 'FRANCHISE_OWNER',
         franchise_id: '',
       },
@@ -89,8 +90,23 @@ export function validateOutletForm(
     );
     if (ownerErrors.full_name) errors.owner_full_name = ownerErrors.full_name;
     if (ownerErrors.email) errors.owner_email = ownerErrors.email;
-  } else if (values.owner_email.trim() && !EMAIL_RE.test(values.owner_email.trim())) {
-    errors.owner_email = 'Enter a valid email address';
+    if (ownerErrors.phone) errors.owner_phone = ownerErrors.phone;
+  } else if (values.owner_email.trim()) {
+    const ownerErrors = validateOwnerForm(
+      {
+        full_name: values.owner_full_name || 'placeholder',
+        email: values.owner_email,
+        phone: values.owner_phone,
+        role: 'FRANCHISE_OWNER',
+        franchise_id: '',
+      },
+      { ownerLabels: true, requireFranchise: false },
+    );
+    if (ownerErrors.email) errors.owner_email = ownerErrors.email;
+    if (ownerErrors.phone) errors.owner_phone = ownerErrors.phone;
+  } else {
+    const phoneError = validatePhone(values.owner_phone, false);
+    if (phoneError) errors.owner_phone = phoneError;
   }
   if (!FRANCHISE_TIERS.includes(values.tier)) {
     errors.tier = 'Select a valid partner tier';
@@ -99,8 +115,8 @@ export function validateOutletForm(
     errors.status = 'Select a valid franchise status';
   }
   if (values.open_date) {
-    const d = new Date(values.open_date);
-    if (Number.isNaN(d.getTime())) errors.open_date = 'Enter a valid date';
+    const dateError = validateIsoDate(values.open_date);
+    if (dateError) errors.open_date = dateError;
   }
   return errors;
 }
@@ -164,6 +180,7 @@ export function OutletForm({
   const titleAction = useMemo(() => (isCreate ? 'Add Outlet' : 'Save Changes'), [isCreate]);
   const ownerNameError = errors.owner_full_name || apiFieldErrors?.full_name;
   const ownerEmailError = errors.owner_email || apiFieldErrors?.email;
+  const ownerPhoneError = errors.owner_phone || apiFieldErrors?.phone;
 
   function update<K extends keyof OutletFormValues>(key: K, value: OutletFormValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -318,6 +335,8 @@ export function OutletForm({
             label="Owner Phone"
             value={values.owner_phone}
             onChange={(e) => update('owner_phone', e.target.value)}
+            error={ownerPhoneError}
+            placeholder="+919876543210"
           />
         </>
       ) : null}

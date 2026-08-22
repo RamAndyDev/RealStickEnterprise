@@ -22,6 +22,7 @@ import {
   updateOwnerOffer,
 } from '../../lib/settingsApi';
 import type { Offer, OfferWritePayload } from '../../types/settings';
+import { validateDateRange, validatePercentage, validateRequiredText } from '../../lib/validation';
 import { apiErrorMessage, formatDate } from '../franchises/status';
 
 type FormValues = {
@@ -65,6 +66,7 @@ export function OffersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Offer | null>(null);
   const [form, setForm] = useState<FormValues>(emptyForm());
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -228,7 +230,13 @@ export function OffersPage() {
               <ErrorBanner message={error} />
             </div>
           ) : null}
-          <Field label="Offer name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Field
+            label="Offer name"
+            required
+            value={form.name}
+            error={formErrors.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
           <Field
             label="Description"
             value={form.description}
@@ -242,6 +250,7 @@ export function OffersPage() {
             step="0.01"
             required
             value={form.discount_value}
+            error={formErrors.discount_value}
             onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
           />
           <SelectField
@@ -260,12 +269,14 @@ export function OffersPage() {
             label="Valid from"
             type="date"
             value={form.valid_from}
+            error={formErrors.valid_from}
             onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
           />
           <Field
             label="Valid to"
             type="date"
             value={form.valid_to}
+            error={formErrors.valid_to}
             onChange={(e) => setForm({ ...form, valid_to: e.target.value })}
           />
           <label className="mb-4 flex items-center gap-2 text-sm">
@@ -289,6 +300,20 @@ export function OffersPage() {
             <Button
               disabled={createMutation.isPending || updateMutation.isPending}
               onClick={() => {
+                const errors: Record<string, string> = {};
+                const nameError = validateRequiredText(form.name, 'Offer name is required.');
+                const percentError = validatePercentage(form.discount_value, {
+                  allowZero: false,
+                  min: 0.01,
+                  max: 100,
+                });
+                if (nameError) errors.name = nameError;
+                if (percentError) errors.discount_value = percentError;
+                const range = validateDateRange(form.valid_from, form.valid_to);
+                if (range.start) errors.valid_from = range.start;
+                if (range.end) errors.valid_to = range.end;
+                setFormErrors(errors);
+                if (Object.keys(errors).length) return;
                 if (editTarget) {
                   updateMutation.mutate({ id: editTarget.id, payload: toPayload(form) });
                 } else {

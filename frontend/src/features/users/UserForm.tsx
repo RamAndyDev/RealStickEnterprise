@@ -83,6 +83,8 @@ export function UserForm({
       setFieldErrors((current) => (current.full_name ? { ...current, full_name: undefined } : current));
     } else if (key === 'email') {
       setFieldErrors((current) => (current.email ? { ...current, email: undefined } : current));
+    } else if (key === 'phone') {
+      setFieldErrors((current) => (current.phone ? { ...current, phone: undefined } : current));
     } else if (key === 'franchise_id' || key === 'role') {
       setFieldErrors((current) =>
         current.franchise_id ? { ...current, franchise_id: undefined } : current,
@@ -99,12 +101,23 @@ export function UserForm({
       const errors = validateOwnerForm(values);
       setFieldErrors(errors);
       if (Object.keys(errors).length > 0) return;
+    } else {
+      const errors = validateOwnerForm({
+        ...values,
+        email: values.email || 'placeholder@example.com',
+      });
+      const next: OwnerCreateFieldErrors = {};
+      if (errors.full_name) next.full_name = errors.full_name;
+      if (errors.phone) next.phone = errors.phone;
+      setFieldErrors(next);
+      if (Object.keys(next).length > 0) return;
     }
     onSubmit(values);
   }
 
   const emailError = fieldErrors.email || apiFieldErrors?.email;
   const nameError = fieldErrors.full_name || apiFieldErrors?.full_name;
+  const phoneError = fieldErrors.phone || apiFieldErrors?.phone;
   const franchiseError = fieldErrors.franchise_id || apiFieldErrors?.franchise_id;
 
   return (
@@ -176,6 +189,8 @@ export function UserForm({
       <Field
         label="Phone"
         value={values.phone}
+        error={phoneError}
+        placeholder="+919876543210"
         onChange={(event) => update('phone', event.target.value)}
       />
 

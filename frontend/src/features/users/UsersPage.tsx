@@ -14,8 +14,10 @@ import {
   SuccessBanner,
 } from '../../components/ui';
 import { listFranchises } from '../../lib/franchisesApi';
+import { safeApiErrorMessage } from '../../lib/validation';
 import {
   createAdminUser,
+  deleteAdminUser,
   listAdminUsers,
   resetAdminUserPassword,
   updateAdminUser,
@@ -29,6 +31,13 @@ import {
   classifyOwnerCreateError,
   type OwnerCreateFieldErrors,
 } from './ownerForm';
+import {
+  DELETE_USER_CONFIRM_MESSAGE,
+  DELETE_USER_FALLBACK,
+  DELETE_USER_SUCCESS,
+  DELETE_USER_TITLE,
+  applyDeleteUserResult,
+} from './deleteUser';
 import { UserDetail } from './UserDetail';
 import { UserForm, emptyUserForm, userToForm, type UserFormValues } from './UserForm';
 
@@ -48,6 +57,8 @@ export function UsersPage() {
   const [editTarget, setEditTarget] = useState<ManagedUser | null>(null);
   const [statusTarget, setStatusTarget] = useState<ManagedUser | null>(null);
   const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -127,6 +138,22 @@ export function UsersPage() {
     onError: (err) => setError(apiErrorMessage(err, 'Unable to update user status.')),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminUser(id),
+    onSuccess: async () => {
+      const result = applyDeleteUserResult(true);
+      setDeleteError(result.error);
+      setDeleteTarget(null);
+      setFeedback(DELETE_USER_SUCCESS);
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (err) => {
+      const result = applyDeleteUserResult(false, safeApiErrorMessage(err, DELETE_USER_FALLBACK));
+      setDeleteError(result.error);
+    },
+  });
+
   const resetMutation = useMutation({
     mutationFn: (id: string) => resetAdminUserPassword(id),
     onSuccess: async (data) => {
@@ -193,7 +220,7 @@ export function UsersPage() {
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
-      {error && !showAdd ? (
+      {error && !showAdd && !deleteTarget ? (
         <div className="mb-3">
           <ErrorBanner message={error} />
         </div>
@@ -255,6 +282,15 @@ export function UsersPage() {
                     </ActionButton>
                     <ActionButton fit="lg" variant="muted" onClick={() => setResetTarget(item)}>
                       Reset Password
+                    </ActionButton>
+                    <ActionButton
+                      variant="danger"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleteTarget(item);
+                      }}
+                    >
+                      Delete
                     </ActionButton>
                   </ActionsTd>
                 </tr>
@@ -366,6 +402,43 @@ export function UsersPage() {
               onClick={() => resetMutation.mutate(resetTarget.id)}
             >
               {resetMutation.isPending ? 'Sending…' : 'Send reset'}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {deleteTarget ? (
+        <Modal
+          title={DELETE_USER_TITLE}
+          onClose={() => {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }}
+        >
+          <p className="text-sm text-[#1A1A18]">{DELETE_USER_CONFIRM_MESSAGE}</p>
+          <p className="mt-1 text-sm font-medium text-[#5C5C56]">{deleteTarget.full_name}</p>
+          {deleteError ? (
+            <div className="mt-3">
+              <ErrorBanner message={deleteError} />
+            </div>
+          ) : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="muted"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
             </Button>
           </div>
         </Modal>

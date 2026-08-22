@@ -8,6 +8,7 @@ import {
   submitContactEnquiry,
   type EnquiryType,
 } from '../../lib/publicApi';
+import { validateEmail, validatePhone, validateRequiredText } from '../../lib/validation';
 import { apiErrorMessage } from '../franchises/status';
 
 const FAILURE = 'Unable to send your enquiry right now. Please try again.';
@@ -28,6 +29,7 @@ export function ContactPage() {
   const [enquiryType, setEnquiryType] = useState<EnquiryType>('GENERAL');
   const [website, setWebsite] = useState('');
   const [done, setDone] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const optionsQuery = useQuery({
     queryKey: ['public-contact-options'],
@@ -51,6 +53,17 @@ export function ContactPage() {
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     setDone(false);
+    const errors: Record<string, string> = {};
+    const nameError = validateRequiredText(name, 'Name is required.', 120);
+    const phoneError = validatePhone(phone, true);
+    const emailError = validateEmail(email, true);
+    const messageError = validateRequiredText(message, 'Message is required.', 2000);
+    if (nameError) errors.name = nameError;
+    if (phoneError) errors.phone = phoneError;
+    if (emailError) errors.email = emailError;
+    if (messageError) errors.message = messageError;
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
     mutation.mutate({
       name: name.trim(),
       phone: phone.trim(),
@@ -120,13 +133,29 @@ export function ContactPage() {
             </option>
           ))}
         </SelectField>
-        <Field label="Name" name="name" required value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+        <Field
+          label="Name"
+          name="name"
+          required
+          value={name}
+          error={fieldErrors.name}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (fieldErrors.name) setFieldErrors((current) => ({ ...current, name: '' }));
+          }}
+          maxLength={120}
+        />
         <Field
           label="Phone"
           name="phone"
           required
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          error={fieldErrors.phone}
+          placeholder="+919876543210"
+          onChange={(e) => {
+            setPhone(e.target.value);
+            if (fieldErrors.phone) setFieldErrors((current) => ({ ...current, phone: '' }));
+          }}
           maxLength={20}
         />
         <Field
@@ -135,7 +164,11 @@ export function ContactPage() {
           type="email"
           required
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          error={fieldErrors.email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (fieldErrors.email) setFieldErrors((current) => ({ ...current, email: '' }));
+          }}
         />
         <label className="mb-3 block">
           <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[.06em] text-[#8A8A84]">
@@ -147,9 +180,17 @@ export function ContactPage() {
             maxLength={2000}
             rows={6}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="w-full rounded-lg border border-[#E0DDD5] bg-white px-3 py-2.5 text-base outline-none focus:border-[#1A7A4A] sm:text-sm"
+            onChange={(e) => {
+              setMessage(e.target.value);
+              if (fieldErrors.message) setFieldErrors((current) => ({ ...current, message: '' }));
+            }}
+            className={`w-full rounded-lg border bg-white px-3 py-2.5 text-base outline-none focus:border-[#1A7A4A] sm:text-sm ${
+              fieldErrors.message ? 'border-red-500' : 'border-[#E0DDD5]'
+            }`}
           />
+          {fieldErrors.message ? (
+            <span className="mt-1 block text-xs text-red-600">{fieldErrors.message}</span>
+          ) : null}
         </label>
         <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden>
           <label>

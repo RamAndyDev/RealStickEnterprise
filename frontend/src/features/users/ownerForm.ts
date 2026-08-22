@@ -10,14 +10,16 @@ export const OWNER_FIELD_ERROR = {
   ownerEmailRequired: 'Owner email is required.',
   emailInvalid: 'Invalid email format.',
   franchiseRequired: 'Franchise owner must belong to a franchise.',
+  phoneInvalid: 'Enter a valid Indian phone number, such as +919876543210 or 9876543210.',
 } as const;
 
-/** Matches backend AdminUserCreate / FranchiseOwnerCreate email validation. */
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const PHONE_RE = /^(?:\+91|91)?[6-9]\d{9}$/;
 
 export type OwnerCreateFieldErrors = Partial<{
   full_name: string;
   email: string;
+  phone: string;
   franchise_id: string;
 }>;
 
@@ -86,6 +88,13 @@ export function ownerNameError(value: string, ownerLabels = false): string | nul
   return null;
 }
 
+export function ownerPhoneError(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!PHONE_RE.test(trimmed.replace(/[\s-]+/g, ''))) return OWNER_FIELD_ERROR.phoneInvalid;
+  return null;
+}
+
 export function ownerFranchiseError(role: UserRole, franchiseId: string): string | null {
   if (role === 'FRANCHISE_OWNER' && !franchiseId.trim()) {
     return OWNER_FIELD_ERROR.franchiseRequired;
@@ -97,6 +106,7 @@ export function validateOwnerForm(
   values: {
     full_name: string;
     email: string;
+    phone?: string;
     role: UserRole;
     franchise_id: string;
   },
@@ -106,10 +116,12 @@ export function validateOwnerForm(
   const errors: OwnerCreateFieldErrors = {};
   const name = ownerNameError(values.full_name, ownerLabels);
   const email = ownerEmailError(values.email, ownerLabels);
+  const phone = ownerPhoneError(values.phone ?? '');
   const franchise =
     options.requireFranchise === false ? null : ownerFranchiseError(values.role, values.franchise_id);
   if (name) errors.full_name = name;
   if (email) errors.email = email;
+  if (phone) errors.phone = phone;
   if (franchise) errors.franchise_id = franchise;
   return errors;
 }
@@ -151,6 +163,7 @@ function isUnsafeOwnerMessage(text: string): boolean {
 function fieldFromMessage(message: string): keyof OwnerCreateFieldErrors | null {
   const lower = message.toLowerCase();
   if (lower.includes('email')) return 'email';
+  if (lower.includes('phone')) return 'phone';
   if (/\bname is required\b|\bowner name\b|\bname cannot\b/.test(lower)) return 'full_name';
   if (/\bmust belong to a franchise\b|\bselect franchise\b/.test(lower)) return 'franchise_id';
   return null;
@@ -200,7 +213,7 @@ export function classifyOwnerCreateError(
     const message = safeMessage(rawMsg, '');
     if (!message) continue;
     const field = locField(row.loc);
-    if (field === 'full_name' || field === 'email' || field === 'franchise_id') {
+    if (field === 'full_name' || field === 'email' || field === 'franchise_id' || field === 'phone') {
       fieldErrors[field] = message;
     } else {
       const inferred = fieldFromMessage(message);

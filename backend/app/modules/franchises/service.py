@@ -10,6 +10,7 @@ from app.core.security import CurrentProfile
 from app.modules.auth.provisioning import provision_auth_user
 from app.modules.franchises.repository import FranchiseRepository
 from app.modules.franchises.schemas import (
+    FRANCHISE_DELETE_BLOCKED_DETAIL,
     OWNER_EMAIL_EXISTS_DETAIL,
     FranchiseApplicationSummary,
     FranchiseCreate,
@@ -232,6 +233,32 @@ class FranchiseService:
             ) from exc
 
         return self.get_franchise(franchise_id)
+
+    def delete_franchise(self, franchise_id: UUID) -> None:
+        existing = self.repo.get_franchise(franchise_id)
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Franchise not found')
+
+        if self.repo.franchise_has_business_references(franchise_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=FRANCHISE_DELETE_BLOCKED_DETAIL,
+            )
+
+        try:
+            deleted = self.repo.delete_franchise(franchise_id)
+        except Exception as exc:
+            if self.repo.is_foreign_key_violation(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=FRANCHISE_DELETE_BLOCKED_DETAIL,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to delete franchise',
+            ) from exc
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Franchise not found')
 
     def assign_owner(
         self,

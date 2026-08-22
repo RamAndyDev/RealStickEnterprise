@@ -685,3 +685,120 @@ def test_offline_payment_unknown_franchise_is_not_found(client, auth_header_fact
         json=_offline_payment_payload(),
     )
     assert response.status_code == 404
+
+
+# --- Franchise delete ---
+
+
+def _create_unused_franchise(client, auth_header_factory, *, code: str = 'UNUSED-01'):
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Disposable Outlet',
+            'city': 'Hyderabad',
+            'tier': 'Founder',
+            'code': code,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_admin_can_delete_unused_franchise(client, auth_header_factory, fake_db):
+    created = _create_unused_franchise(client, auth_header_factory)
+    franchise_id = created['id']
+    assert any(row['franchise_id'] == franchise_id for row in fake_db.tables['launch_checklist_items'])
+
+    response = client.delete(
+        f'/api/v1/admin/franchises/{franchise_id}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 204
+    assert not any(row['id'] == franchise_id for row in fake_db.tables['franchises'])
+    assert not any(
+        row['franchise_id'] == franchise_id for row in fake_db.tables['launch_checklist_items']
+    )
+    missing = client.get(
+        f'/api/v1/admin/franchises/{franchise_id}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert missing.status_code == 404
+
+
+def test_non_admin_cannot_delete_franchise(client, auth_header_factory):
+    created = _create_unused_franchise(client, auth_header_factory, code='UNUSED-02')
+    for headers in (
+        auth_header_factory(OWNER_ID, 'owner@realstick.in'),
+        auth_header_factory(EMPLOYEE_ID, 'employee@realstick.in'),
+    ):
+        response = client.delete(f'/api/v1/admin/franchises/{created["id"]}', headers=headers)
+        assert response.status_code == 403
+
+
+def test_unknown_franchise_delete_returns_404(client, auth_header_factory):
+    response = client.delete(
+        f'/api/v1/admin/franchises/{uuid4()}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'Franchise not found'
+
+
+def test_referenced_franchise_delete_returns_409(client, auth_header_factory, fake_db):
+    from app.modules.franchises.schemas import FRANCHISE_DELETE_BLOCKED_DETAIL
+
+    payments_before = list(fake_db.tables['franchise_payments'])
+    profiles_before = list(fake_db.tables['profiles'])
+    status_before = next(
+        row['status'] for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A)
+    )
+    response = client.delete(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 409
+    assert response.json()['detail'] == FRANCHISE_DELETE_BLOCKED_DETAIL
+    assert any(row['id'] == str(FRANCHISE_A) for row in fake_db.tables['franchises'])
+    assert fake_db.tables['franchise_payments'] == payments_before
+    assert fake_db.tables['profiles'] == profiles_before
+    status_after = next(
+        row['status'] for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A)
+    )
+    assert status_after == status_before
+    assert status_after == 'ACTIVE'
+
+
+def test_blocked_franchise_delete_does_not_deactivate(client, auth_header_factory, fake_db):
+    franchise = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+    assert franchise['status'] == 'ACTIVE'
+    response = client.delete(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 409
+    after = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+    assert after['status'] == 'ACTIVE'
+    assert after['is_archived'] is False
+
+
+def test_successful_franchise_delete_does_not_remove_unrelated_records(
+    client, auth_header_factory, fake_db
+):
+    created = _create_unused_franchise(client, auth_header_factory, code='UNUSED-03')
+    keep = _create_unused_franchise(client, auth_header_factory, code='KEEP-01')
+    payments_before = list(fake_db.tables['franchise_payments'])
+    hyd_before = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+
+    response = client.delete(
+        f'/api/v1/admin/franchises/{created["id"]}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 204
+    remaining_ids = {row['id'] for row in fake_db.tables['franchises']}
+    assert created['id'] not in remaining_ids
+    assert keep['id'] in remaining_ids
+    assert str(FRANCHISE_A) in remaining_ids
+    assert fake_db.tables['franchise_payments'] == payments_before
+    hyd_after = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+    assert hyd_after == hyd_before

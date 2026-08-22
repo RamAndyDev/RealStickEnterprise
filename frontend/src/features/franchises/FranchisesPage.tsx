@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import {
   ActionButton,
+  ActionMenu,
   ActionSelect,
   ActionsTd,
   ActionsTh,
@@ -19,10 +20,12 @@ import {
 import {
   createFranchise,
   createFranchiseOwner,
+  deleteFranchise,
   listFranchises,
   updateFranchise,
   updateFranchiseStatus,
 } from '../../lib/franchisesApi';
+import { safeApiErrorMessage } from '../../lib/validation';
 import {
   FRANCHISE_STATUSES,
   type Franchise,
@@ -45,6 +48,13 @@ import {
   validateOwnerForm,
   type OwnerCreateFieldErrors,
 } from '../users/ownerForm';
+import {
+  DELETE_FRANCHISE_CONFIRM_MESSAGE,
+  DELETE_FRANCHISE_FALLBACK,
+  DELETE_FRANCHISE_SUCCESS,
+  DELETE_FRANCHISE_TITLE,
+  applyDeleteFranchiseResult,
+} from './deleteFranchise';
 
 export function FranchisesPage() {
   const navigate = useNavigate();
@@ -58,6 +68,8 @@ export function FranchisesPage() {
     franchise: Franchise;
     next: FranchiseStatus;
   } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Franchise | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [ownerTarget, setOwnerTarget] = useState<Franchise | null>(null);
   const [ownerEmail, setOwnerEmail] = useState('');
   const [ownerFullName, setOwnerFullName] = useState('');
@@ -127,6 +139,25 @@ export function FranchisesPage() {
       await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
     },
     onError: (err) => setError(apiErrorMessage(err, 'Unable to change status.')),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteFranchise(id),
+    onSuccess: async () => {
+      const result = applyDeleteFranchiseResult(true);
+      setDeleteError(result.error);
+      setDeleteTarget(null);
+      setFeedback(DELETE_FRANCHISE_SUCCESS);
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
+    },
+    onError: (err) => {
+      const result = applyDeleteFranchiseResult(
+        false,
+        safeApiErrorMessage(err, DELETE_FRANCHISE_FALLBACK),
+      );
+      setDeleteError(result.error);
+    },
   });
 
   const createOwnerMutation = useMutation({
@@ -228,7 +259,7 @@ export function FranchisesPage() {
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
-      {error && !ownerTarget && !showAdd ? (
+      {error && !ownerTarget && !showAdd && !deleteTarget ? (
         <div className="mb-3">
           <ErrorBanner message={error} />
         </div>
@@ -247,144 +278,221 @@ export function FranchisesPage() {
       ) : null}
 
       {!listQuery.isLoading && items.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-[#E0DDD5] bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Outlet</th>
-                <th className="px-4 py-3 font-semibold">Tier</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Owner</th>
-                <th className="px-4 py-3 font-semibold">Payment</th>
-                <th className="px-4 py-3 font-semibold">Launch</th>
-                <th className="px-4 py-3 font-semibold">Open</th>
-                <ActionsTh />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b border-[#E0DDD5] last:border-b-0">
-                  <td className="px-4 py-3">
+        <>
+          <div className="hidden overflow-x-auto rounded-xl border border-[#E0DDD5] bg-white md:block">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Outlet</th>
+                  <th className="px-4 py-3 font-semibold">Owner</th>
+                  <th className="px-4 py-3 font-semibold">Contact</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Launch</th>
+                  <th className="px-4 py-3 font-semibold">Payment</th>
+                  <ActionsTh />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-b border-[#E0DDD5] last:border-b-0">
+                    <td className="px-4 py-3 align-top">
+                      <Link
+                        to={`/franchises/${item.id}`}
+                        className="font-semibold text-[#1A7A4A] hover:underline"
+                      >
+                        {item.name}
+                      </Link>
+                      <div className="mt-0.5 text-xs text-[#8A8A84]">
+                        {[item.city, item.tier ? `${item.tier} Partner` : null]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <div className="font-medium text-[#1A1A18]">
+                        {item.owner?.full_name ?? 'Unassigned'}
+                      </div>
+                      {item.owner_email ? (
+                        <div className="mt-0.5 text-xs text-[#8A8A84]">{item.owner_email}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 align-top text-[#4A4A46]">
+                      {item.owner?.phone || item.owner_email || '—'}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <LaunchProgressCompact
+                        source={{
+                          status: item.status,
+                          payment_status: item.payment_status,
+                        }}
+                      />
+                    </td>
+                    <td className="px-4 py-3 align-top text-[#4A4A46]">
+                      {item.payment_status ?? '—'}
+                    </td>
+                    <ActionsTd>
+                      <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
+                        Edit
+                      </ActionButton>
+                      <ActionSelect
+                        value=""
+                        aria-label={`Change status for ${item.name}`}
+                        onChange={(e) => {
+                          const next = e.target.value as FranchiseStatus;
+                          if (!next) return;
+                          setStatusTarget({ franchise: item, next });
+                        }}
+                      >
+                        <option value="">
+                          {item.status === 'ACTIVE' ? 'Deactivate…' : 'Activate…'}
+                        </option>
+                        {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
+                          <option key={status} value={status}>
+                            {statusLabel(status)}
+                          </option>
+                        ))}
+                      </ActionSelect>
+                      <ActionMenu>
+                        <ActionButton variant="outline" onClick={() => resetOwnerForm(item)}>
+                          Create Owner
+                        </ActionButton>
+                        <ActionButton
+                          variant="danger"
+                          onClick={() => {
+                            setDeleteError(null);
+                            setDeleteTarget(item);
+                          }}
+                        >
+                          Delete
+                        </ActionButton>
+                        <ActionButton
+                          variant="muted"
+                          onClick={() => navigate(`/franchises/${item.id}`)}
+                        >
+                          View
+                        </ActionButton>
+                      </ActionMenu>
+                    </ActionsTd>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid gap-3 md:hidden">
+            {items.map((item) => {
+              const launch = deriveLaunchProgress({
+                status: item.status,
+                payment_status: item.payment_status,
+              });
+              return (
+                <article
+                  key={`card-${item.id}`}
+                  className="overflow-hidden rounded-[10px] border border-[#E0DDD5] bg-white"
+                >
+                  <div
+                    className="px-4 py-3"
+                    style={{
+                      background: item.status === 'ACTIVE' ? '#0D4F2E' : '#8A8A84',
+                    }}
+                  >
                     <Link
                       to={`/franchises/${item.id}`}
-                      className="font-semibold text-[#1A7A4A] hover:underline"
+                      className="text-[15px] font-bold text-white hover:underline"
                     >
                       {item.name}
                     </Link>
-                    <div className="text-xs text-[#8A8A84]">
-                      {[item.city, item.tier ? `${item.tier} Partner` : null]
-                        .filter(Boolean)
-                        .join(' · ')}
+                    <div className="mt-0.5 text-[11px] text-white/70">
+                      {item.city || '—'}
+                      {item.tier ? ` · ${item.tier} Partner` : ''}
                     </div>
-                    {item.address ? (
-                      <div className="mt-0.5 text-[11px] text-[#8A8A84]">{item.address}</div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3">{item.tier ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>{item.owner?.full_name ?? 'Unassigned'}</div>
-                    <div className="text-xs text-[#8A8A84]">{item.owner_email ?? '—'}</div>
-                  </td>
-                  <td className="px-4 py-3">{item.payment_status ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <LaunchProgressCompact
-                      source={{
-                        status: item.status,
-                        payment_status: item.payment_status,
-                      }}
-                    />
-                  </td>
-                  <td className="px-4 py-3">{formatDate(item.open_date)}</td>
-                  <ActionsTd>
-                    <ActionButton
-                      variant="outline"
-                      onClick={() => navigate(`/franchises/${item.id}`)}
-                    >
-                      View
-                    </ActionButton>
-                    <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
-                      Edit
-                    </ActionButton>
-                    <ActionButton variant="outline" onClick={() => resetOwnerForm(item)}>
-                      Create Owner
-                    </ActionButton>
-                    <ActionSelect
-                      value=""
-                      aria-label={`Change status for ${item.name}`}
-                      onChange={(e) => {
-                        const next = e.target.value as FranchiseStatus;
-                        if (!next) return;
-                        setStatusTarget({ franchise: item, next });
-                      }}
-                    >
-                      <option value="">Status…</option>
-                      {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
-                        <option key={status} value={status}>
-                          {statusLabel(status)}
-                        </option>
-                      ))}
-                    </ActionSelect>
-                  </ActionsTd>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-
-      {/* Prototype-style outlet cards for at-a-glance view */}
-      {!listQuery.isLoading && items.length > 0 ? (
-        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
-          {items.map((item) => {
-            const launch = deriveLaunchProgress({
-              status: item.status,
-              payment_status: item.payment_status,
-            });
-            return (
-            <button
-              key={`card-${item.id}`}
-              type="button"
-              onClick={() => navigate(`/franchises/${item.id}`)}
-              className="overflow-hidden rounded-[10px] border border-[#E0DDD5] bg-white text-left"
-            >
-              <div
-                className="px-3 py-2.5"
-                style={{
-                  background: item.status === 'ACTIVE' ? '#0D4F2E' : '#8A8A84',
-                }}
-              >
-                <div className="text-[13px] font-bold text-white">{item.name}</div>
-                <div className="mt-0.5 text-[10px] text-white/55">
-                  {item.city || '—'} · {item.tier || 'Partner'} Partner
-                </div>
-              </div>
-              <div className="px-3 py-2.5">
-                <div className="mb-2 grid grid-cols-2 gap-2">
-                  <div className="rounded-md bg-[#FDFAF4] p-2 text-center">
-                    <div className="font-serif text-[15px] font-bold text-[#1A7A4A]">
-                      {statusLabel(item.status)}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">Status</div>
                   </div>
-                  <div className="rounded-md bg-[#FDFAF4] p-2 text-center">
-                    <div className="mb-1 flex justify-center">
+                  <div className="space-y-3 px-4 py-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
+                          Owner
+                        </div>
+                        <div className="mt-0.5 font-medium">
+                          {item.owner?.full_name ?? 'Unassigned'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
+                          Contact
+                        </div>
+                        <div className="mt-0.5">{item.owner?.phone || item.owner_email || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
+                          Status
+                        </div>
+                        <div className="mt-1">
+                          <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[.05em] text-[#8A8A84]">
+                          Payment
+                        </div>
+                        <div className="mt-0.5">{item.payment_status ?? '—'}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md bg-[#FDFAF4] px-3 py-2">
                       <LaunchProgressDots progress={launch} />
+                      <div className="text-right">
+                        <div className="font-serif text-sm font-bold text-[#E8621A]">
+                          {launch.currentShortLabel}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">
+                          Launch
+                        </div>
+                      </div>
                     </div>
-                    <div className="font-serif text-[13px] font-bold text-[#E8621A]">
-                      {launch.currentShortLabel}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
+                        Edit
+                      </ActionButton>
+                      <ActionSelect
+                        value=""
+                        aria-label={`Change status for ${item.name}`}
+                        onChange={(e) => {
+                          const next = e.target.value as FranchiseStatus;
+                          if (!next) return;
+                          setStatusTarget({ franchise: item, next });
+                        }}
+                      >
+                        <option value="">
+                          {item.status === 'ACTIVE' ? 'Deactivate…' : 'Activate…'}
+                        </option>
+                        {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
+                          <option key={status} value={status}>
+                            {statusLabel(status)}
+                          </option>
+                        ))}
+                      </ActionSelect>
+                      <ActionButton variant="outline" onClick={() => resetOwnerForm(item)}>
+                        Create Owner
+                      </ActionButton>
+                      <ActionButton
+                        variant="danger"
+                        onClick={() => {
+                          setDeleteError(null);
+                          setDeleteTarget(item);
+                        }}
+                      >
+                        Delete
+                      </ActionButton>
                     </div>
-                    <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">Launch</div>
                   </div>
-                </div>
-                <div className="text-[10px] text-[#8A8A84]">{item.address || 'No address'}</div>
-              </div>
-            </button>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       ) : null}
 
       {showAdd ? (
@@ -500,7 +608,20 @@ export function FranchisesPage() {
           <Field
             label="Phone"
             value={ownerPhone}
-            onChange={(e) => setOwnerPhone(e.target.value)}
+            error={ownerFieldErrors.phone}
+            placeholder="+919876543210"
+            onChange={(e) => {
+              setOwnerPhone(e.target.value);
+              if (ownerFieldErrors.phone || ownerFormError) {
+                setOwnerFieldErrors((current) => {
+                  if (!current.phone) return current;
+                  const next = { ...current };
+                  delete next.phone;
+                  return next;
+                });
+                setOwnerFormError(null);
+              }
+            }}
           />
           <p className="mb-4 text-xs text-[#8A8A84]">
             Supabase Auth will email a secure password setup / invite link. No permanent
@@ -523,6 +644,7 @@ export function FranchisesPage() {
                   {
                     full_name: ownerFullName,
                     email: ownerEmail,
+                    phone: ownerPhone,
                     role: 'FRANCHISE_OWNER',
                     franchise_id: ownerTarget.id,
                   },
@@ -543,6 +665,43 @@ export function FranchisesPage() {
               }}
             >
               {createOwnerMutation.isPending ? 'Creating…' : 'Create Owner'}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {deleteTarget ? (
+        <Modal
+          title={DELETE_FRANCHISE_TITLE}
+          onClose={() => {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }}
+        >
+          <p className="text-sm text-[#1A1A18]">{DELETE_FRANCHISE_CONFIRM_MESSAGE}</p>
+          <p className="mt-1 text-sm font-medium text-[#5C5C56]">{deleteTarget.name}</p>
+          {deleteError ? (
+            <div className="mt-3">
+              <ErrorBanner message={deleteError} />
+            </div>
+          ) : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="muted"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
             </Button>
           </div>
         </Modal>

@@ -17,6 +17,9 @@ from app.modules.franchises.schemas import FranchiseOwnerCreate
 from app.modules.franchises.service import FranchiseService
 from app.modules.users.repository import UsersRepository
 from app.modules.users.schemas import (
+    LAST_ADMIN_DELETE_DETAIL,
+    SELF_DELETE_DETAIL,
+    USER_DELETE_BLOCKED_DETAIL,
     AdminUserCreate,
     AdminUserUpdate,
     EmployeeCreate,
@@ -168,6 +171,65 @@ class UsersService:
                 self._raise_profile_write_error(exc, action='update')
 
         return self.get_user(user_id)
+
+    def delete_user(self, user_id: UUID, actor: CurrentProfile) -> None:
+        existing = self._admin_managed_profile(user_id)
+
+        try:
+            role = UserRole(existing['role'])
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='User profile has an invalid role',
+            ) from exc
+
+        if role == UserRole.SYSTEM_ADMIN:
+            remaining = self.repo.count_active_admins(exclude_id=user_id)
+            if existing.get('is_active') and remaining < 1:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=LAST_ADMIN_DELETE_DETAIL,
+                )
+
+        if str(existing['id']) == str(actor.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=SELF_DELETE_DETAIL,
+            )
+
+        if self.repo.profile_has_business_references(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=USER_DELETE_BLOCKED_DETAIL,
+            )
+
+        snapshot = dict(existing)
+        try:
+            deleted = self.repo.delete_profile(user_id)
+        except Exception as exc:
+            if self.repo.is_foreign_key_violation(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=USER_DELETE_BLOCKED_DETAIL,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to delete user',
+            ) from exc
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+        try:
+            self.repo.delete_auth_user(str(user_id))
+        except Exception as exc:
+            try:
+                self.repo.create_profile(snapshot)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to delete user',
+            ) from exc
 
     def reset_password(self, user_id: UUID, *, allow_employee: bool = False) -> PasswordResetResponse:
         row = self.repo.get_profile(user_id) if allow_employee else self._admin_managed_profile(user_id)

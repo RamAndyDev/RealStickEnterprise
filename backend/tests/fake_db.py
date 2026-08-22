@@ -380,6 +380,10 @@ class FakeQuery:
             matched = self._apply_filters(table_rows)
             if self._table == 'products':
                 self._db.enforce_product_delete_fks(matched)
+            if self._table == 'franchises':
+                self._db.enforce_franchise_delete_fks(matched)
+            if self._table == 'profiles':
+                self._db.enforce_profile_delete_fks(matched)
             deleted = [deepcopy(r) for r in matched]
             ids = {str(r.get('id')) for r in matched}
             self._db.tables[self._table] = [
@@ -628,6 +632,55 @@ class FakeDatabase:
     def enforce_master_price(self, product_row: dict) -> None:
         # Master price is independent of franchise selling prices.
         return
+
+    def enforce_franchise_delete_fks(self, franchises: list[dict]) -> None:
+        """Mirror Postgres NO ACTION FKs on franchises.id. Checklist is deleted first."""
+        franchise_ids = {str(row.get('id')) for row in franchises if row.get('id')}
+        if not franchise_ids:
+            return
+        for table, column in (
+            ('profiles', 'franchise_id'),
+            ('franchise_payments', 'franchise_id'),
+            ('orders', 'franchise_id'),
+            ('franchise_product_prices', 'franchise_id'),
+            ('inventory_movements', 'franchise_id'),
+            ('franchise_ingredient_stock', 'franchise_id'),
+            ('discounts', 'franchise_id'),
+            ('coupons', 'franchise_id'),
+            ('promotion_franchises', 'franchise_id'),
+            ('franchise_audits', 'franchise_id'),
+            ('quality_audits', 'franchise_id'),
+            ('gallery_items', 'franchise_id'),
+            ('franchise_applications', 'converted_franchise_id'),
+        ):
+            for row in self.tables.get(table, []):
+                if str(row.get(column) or '') in franchise_ids:
+                    raise Exception(
+                        'update or delete on table "franchises" violates foreign key constraint'
+                    )
+
+    def enforce_profile_delete_fks(self, profiles: list[dict]) -> None:
+        """Mirror Postgres NO ACTION / RESTRICT FKs on profiles.id."""
+        profile_ids = {str(row.get('id')) for row in profiles if row.get('id')}
+        if not profile_ids:
+            return
+        for table, column in (
+            ('orders', 'cashier_id'),
+            ('franchise_audits', 'auditor_id'),
+            ('quality_audits', 'auditor_id'),
+            ('gallery_items', 'uploaded_by'),
+            ('inventory_movements', 'created_by'),
+            ('franchise_applications', 'reviewed_by'),
+            ('launch_checklist_items', 'completed_by'),
+            ('promotions', 'created_by'),
+            ('discounts', 'created_by'),
+            ('employee_sessions', 'employee_id'),
+        ):
+            for row in self.tables.get(table, []):
+                if str(row.get(column) or '') in profile_ids:
+                    raise Exception(
+                        'update or delete on table "profiles" violates foreign key constraint'
+                    )
 
     def enforce_product_delete_fks(self, products: list[dict]) -> None:
         """Mirror Postgres NO ACTION FKs on products.id. No CASCADE."""

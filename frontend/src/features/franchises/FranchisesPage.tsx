@@ -1,25 +1,39 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { CircleCheck, CircleMinus, MapPin, Store, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
+  ActionButton,
+  ActionMenu,
+  ActionMenuItem,
+  ActionMenuSeparator,
+  ActionSelect,
+  ActionsTd,
+  ActionsTh,
+  AdminListCard,
   Badge,
   Button,
   EmptyState,
   ErrorBanner,
   Field,
-  LoadingBlock,
+  FilterSelect,
+  ListToolbar,
   Modal,
+  PageHeader,
+  StatCard,
   SuccessBanner,
+  TableSkeleton,
 } from '../../components/ui';
 import {
-  assignFranchiseOwner,
   createFranchise,
   createFranchiseOwner,
+  deleteFranchise,
   listFranchises,
   updateFranchise,
   updateFranchiseStatus,
 } from '../../lib/franchisesApi';
+import { safeApiErrorMessage } from '../../lib/validation';
 import {
   FRANCHISE_STATUSES,
   type Franchise,
@@ -32,7 +46,31 @@ import {
   toWritePayload,
   type OutletFormValues,
 } from './OutletForm';
-import { apiErrorMessage, formatDate, statusLabel, statusTone } from './status';
+import { FranchiseAuditSettings } from './FranchiseAuditSettings';
+import { LaunchProgressCompact } from './LaunchProgress';
+import { franchiseLocationLine, franchiseSummaryCounts } from './franchiseListPresentation';
+import { apiErrorMessage, statusLabel, statusTone } from './status';
+import {
+  applyOwnerCreateResult,
+  classifyOwnerCreateError,
+  validateOwnerForm,
+  type OwnerCreateFieldErrors,
+} from '../users/ownerForm';
+import {
+  DELETE_FRANCHISE_CONFIRM_MESSAGE,
+  DELETE_FRANCHISE_FALLBACK,
+  DELETE_FRANCHISE_SUCCESS,
+  DELETE_FRANCHISE_TITLE,
+  applyDeleteFranchiseResult,
+} from './deleteFranchise';
+import { paymentStateLabel, paymentStatusTone } from './offlinePayment';
+
+function launchSource(item: Franchise) {
+  return {
+    status: item.status,
+    payment_status: item.payment_status,
+  };
+}
 
 export function FranchisesPage() {
   const navigate = useNavigate();
@@ -46,14 +84,18 @@ export function FranchisesPage() {
     franchise: Franchise;
     next: FranchiseStatus;
   } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Franchise | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [ownerTarget, setOwnerTarget] = useState<Franchise | null>(null);
-  const [ownerMode, setOwnerMode] = useState<'create' | 'assign'>('create');
-  const [ownerProfileId, setOwnerProfileId] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
   const [ownerFullName, setOwnerFullName] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createFieldErrors, setCreateFieldErrors] = useState<OwnerCreateFieldErrors>({});
+  const [ownerFormError, setOwnerFormError] = useState<string | null>(null);
+  const [ownerFieldErrors, setOwnerFieldErrors] = useState<OwnerCreateFieldErrors>({});
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -72,12 +114,23 @@ export function FranchisesPage() {
   const createMutation = useMutation({
     mutationFn: (values: OutletFormValues) => createFranchise(toWritePayload(values, true)),
     onSuccess: async () => {
+      const result = applyOwnerCreateResult(true);
       setShowAdd(false);
+      setCreateError(result.error);
+      setCreateFieldErrors({});
       setFeedback('Outlet added successfully.');
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
     },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to add outlet.')),
+    onError: (err) => {
+      const classified = classifyOwnerCreateError(err, {
+        ownerLabels: true,
+        fallback: 'Unable to add outlet.',
+      });
+      const result = applyOwnerCreateResult(false, classified.formError);
+      setCreateError(result.error);
+      setCreateFieldErrors(classified.fieldErrors);
+    },
   });
 
   const updateMutation = useMutation({
@@ -104,25 +157,23 @@ export function FranchisesPage() {
     onError: (err) => setError(apiErrorMessage(err, 'Unable to change status.')),
   });
 
-  const ownerMutation = useMutation({
-    mutationFn: ({
-      id,
-      owner_profile_id,
-      owner_email,
-    }: {
-      id: string;
-      owner_profile_id?: string;
-      owner_email?: string;
-    }) => assignFranchiseOwner(id, { owner_profile_id, owner_email }),
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteFranchise(id),
     onSuccess: async () => {
-      setOwnerTarget(null);
-      setOwnerProfileId('');
-      setOwnerEmail('');
-      setFeedback('Franchise owner assigned successfully.');
+      const result = applyDeleteFranchiseResult(true);
+      setDeleteError(result.error);
+      setDeleteTarget(null);
+      setFeedback(DELETE_FRANCHISE_SUCCESS);
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
     },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to assign owner.')),
+    onError: (err) => {
+      const result = applyDeleteFranchiseResult(
+        false,
+        safeApiErrorMessage(err, DELETE_FRANCHISE_FALLBACK),
+      );
+      setDeleteError(result.error);
+    },
   });
 
   const createOwnerMutation = useMutation({
@@ -138,226 +189,357 @@ export function FranchisesPage() {
       phone?: string;
     }) => createFranchiseOwner(id, { full_name, email, phone }),
     onSuccess: async (data) => {
+      const result = applyOwnerCreateResult(true);
       setOwnerTarget(null);
       setOwnerFullName('');
       setOwnerEmail('');
       setOwnerPhone('');
+      setOwnerFormError(result.error);
+      setOwnerFieldErrors({});
       setFeedback(data.message);
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-franchises'] });
     },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to create franchise owner.')),
+    onError: (err) => {
+      const classified = classifyOwnerCreateError(err, { ownerLabels: true });
+      const result = applyOwnerCreateResult(false, classified.formError);
+      setOwnerFormError(result.error);
+      setOwnerFieldErrors(classified.fieldErrors);
+    },
   });
 
   function resetOwnerForm(franchise: Franchise) {
     setOwnerTarget(franchise);
-    setOwnerMode('create');
     setOwnerEmail(franchise.owner_email ?? '');
-    setOwnerProfileId(franchise.owner?.id ?? '');
     setOwnerFullName('');
     setOwnerPhone('');
+    setOwnerFormError(null);
+    setOwnerFieldErrors({});
+  }
+
+  function clearOwnerSubmitError() {
+    setOwnerFormError(null);
+    setOwnerFieldErrors({});
+  }
+
+  function clearAddSubmitError() {
+    setCreateError(null);
+    setCreateFieldErrors({});
+  }
+
+  function closeAdd() {
+    setShowAdd(false);
+    clearAddSubmitError();
   }
 
   const items = listQuery.data?.items ?? [];
-  const activeCount = items.filter((item) => item.status === 'ACTIVE').length;
+  const summary = useMemo(() => franchiseSummaryCounts(items), [items]);
+
+  function moreMenu(item: Franchise, includeStatus: boolean) {
+    return (
+      <ActionMenu label={`More actions for ${item.name}`}>
+        <ActionMenuItem onClick={() => setEditTarget(item)}>Edit</ActionMenuItem>
+        <ActionButton variant="muted" className="h-auto min-w-0 w-full justify-start border-0 bg-transparent px-3 py-2 text-left text-[13px] font-medium text-[#1A1A18] shadow-none hover:bg-[#F7F5F0]" onClick={() => resetOwnerForm(item)}>
+          Create Owner
+        </ActionButton>
+        {includeStatus
+          ? FRANCHISE_STATUSES.filter((status) => status !== item.status).map((status) => (
+              <ActionMenuItem
+                key={status}
+                onClick={() => setStatusTarget({ franchise: item, next: status })}
+              >
+                {statusLabel(status)}
+              </ActionMenuItem>
+            ))
+          : null}
+        <ActionMenuSeparator />
+        <ActionMenuItem
+          destructive
+          onClick={() => {
+            setDeleteError(null);
+            setDeleteTarget(item);
+          }}
+        >
+          Delete
+        </ActionMenuItem>
+      </ActionMenu>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1A1A18]">Franchise Outlets</h1>
-          <p className="text-xs text-[#8A8A84]">
-            {listQuery.isLoading ? 'Loading…' : `${activeCount} active`}
-          </p>
-        </div>
-        <Button onClick={() => setShowAdd(true)}>+ Add Outlet</Button>
-      </div>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        title="Franchise Management"
+        description="Manage franchise outlets, owners, launch progress and payments."
+        action={<Button onClick={() => setShowAdd(true)}>+ Add Outlet</Button>}
+      />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_220px]">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search outlets by name, city, code, or owner email"
-          className="w-full rounded-lg border border-[#E0DDD5] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1A7A4A]"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as FranchiseStatus | '')}
-          className="w-full rounded-lg border border-[#E0DDD5] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1A7A4A]"
-        >
-          <option value="">All statuses</option>
-          {FRANCHISE_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {statusLabel(status)}
-            </option>
-          ))}
-        </select>
-      </div>
+      <FranchiseAuditSettings />
+
+      {!listQuery.isError ? (
+        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            compact
+            label="Total Outlets"
+            value={listQuery.isLoading ? '—' : summary.total}
+            color="navy"
+            icon={<Store className="h-4 w-4" />}
+          />
+          <StatCard
+            compact
+            label="Active"
+            value={listQuery.isLoading ? '—' : summary.active}
+            color="green"
+            icon={<CircleCheck className="h-4 w-4" />}
+          />
+          <StatCard
+            compact
+            label="Inactive"
+            value={listQuery.isLoading ? '—' : summary.inactive}
+            color="orange"
+            icon={<CircleMinus className="h-4 w-4" />}
+          />
+          <StatCard
+            compact
+            label="Unassigned Owner"
+            value={listQuery.isLoading ? '—' : summary.unassigned}
+            color="mint"
+            icon={<UserRound className="h-4 w-4" />}
+          />
+        </div>
+      ) : null}
+
+      <ListToolbar
+        search={search}
+        searchPlaceholder="Search outlets by name, city, code, or owner email"
+        onSearchChange={setSearch}
+        filters={
+          <FilterSelect
+            value={statusFilter}
+            aria-label="Filter by status"
+            onChange={(e) => setStatusFilter(e.target.value as FranchiseStatus | '')}
+          >
+            <option value="">All statuses</option>
+            {FRANCHISE_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {statusLabel(status)}
+              </option>
+            ))}
+          </FilterSelect>
+        }
+      />
 
       {feedback ? (
-        <div className="mb-3">
+        <div className="mb-4">
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
-      {error ? (
-        <div className="mb-3">
+      {error && !ownerTarget && !showAdd && !deleteTarget ? (
+        <div className="mb-4">
           <ErrorBanner message={error} />
         </div>
       ) : null}
 
-      {listQuery.isLoading ? <LoadingBlock label="Loading franchise outlets…" /> : null}
+      {listQuery.isLoading ? <TableSkeleton /> : null}
       {listQuery.isError ? (
         <ErrorBanner message={apiErrorMessage(listQuery.error, 'Unable to load outlets.')} />
       ) : null}
 
       {!listQuery.isLoading && !listQuery.isError && items.length === 0 ? (
         <EmptyState
-          title="No outlets yet"
-          hint="Add the first outlet to begin franchise management."
+          title="No franchises found"
+          hint="Try changing your search or add a new outlet."
+          action={<Button onClick={() => setShowAdd(true)}>+ Add Outlet</Button>}
         />
       ) : null}
 
       {!listQuery.isLoading && items.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-[#E0DDD5] bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Outlet</th>
-                <th className="px-4 py-3 font-semibold">Tier</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Owner</th>
-                <th className="px-4 py-3 font-semibold">Payment</th>
-                <th className="px-4 py-3 font-semibold">Launch</th>
-                <th className="px-4 py-3 font-semibold">Open</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b border-[#E0DDD5] last:border-b-0">
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/franchises/${item.id}`}
-                      className="font-semibold text-[#1A7A4A] hover:underline"
-                    >
-                      {item.name}
-                    </Link>
-                    <div className="text-xs text-[#8A8A84]">
-                      {[item.city, item.tier ? `${item.tier} Partner` : null]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </div>
-                    {item.address ? (
-                      <div className="mt-0.5 text-[11px] text-[#8A8A84]">{item.address}</div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3">{item.tier ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>{item.owner?.full_name ?? 'Unassigned'}</div>
-                    <div className="text-xs text-[#8A8A84]">{item.owner_email ?? '—'}</div>
-                  </td>
-                  <td className="px-4 py-3">{item.payment_status ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    {item.launch_progress_total
-                      ? `${item.launch_progress_completed}/${item.launch_progress_total}`
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3">{formatDate(item.open_date)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/franchises/${item.id}`)}>
-                        View
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditTarget(item)}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => resetOwnerForm(item)}
-                      >
-                        Owner
-                      </Button>
-                      <select
-                        className="rounded-lg border border-[#E0DDD5] px-2 py-1 text-xs"
-                        value=""
-                        onChange={(e) => {
-                          const next = e.target.value as FranchiseStatus;
-                          if (!next) return;
-                          setStatusTarget({ franchise: item, next });
-                        }}
-                      >
-                        <option value="">Status…</option>
-                        {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
-                          <option key={status} value={status}>
-                            {statusLabel(status)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </td>
+        <>
+          <div className="hidden overflow-x-auto rounded-xl border border-[#E8E6E0] bg-white shadow-[0_1px_2px_rgba(0,0,0,.04)] lg:block">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-[#E8E6E0] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
+                <tr>
+                  <th className="w-[22%] px-5 py-3 font-semibold">Outlet</th>
+                  <th className="w-[18%] px-5 py-3 font-semibold">Owner</th>
+                  <th className="w-[16%] px-5 py-3 font-semibold">Contact</th>
+                  <th className="w-[10%] px-5 py-3 font-semibold">Status</th>
+                  <th className="w-[14%] min-w-[7.5rem] whitespace-nowrap px-5 py-3 font-semibold">Launch</th>
+                  <th className="w-[10%] px-5 py-3 font-semibold">Payment</th>
+                  <ActionsTh className="px-5" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const location = franchiseLocationLine(item);
+                  return (
+                    <tr
+                      key={item.id}
+                      className="border-b border-[#F0EEE8] last:border-b-0 hover:bg-[#FDFAF4]"
+                    >
+                      <td className="px-5 py-4 align-middle">
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F7F5F0] text-[#8A8A84]">
+                            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
+                          <div className="min-w-0">
+                            <Link
+                              to={`/franchises/${item.id}`}
+                              className="text-[14px] font-semibold text-[#1A1A18] hover:text-[#1A7A4A]"
+                            >
+                              {item.name}
+                            </Link>
+                            {location ? (
+                              <div className="mt-0.5 text-xs text-[#8A8A84]">{location}</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        {item.owner?.full_name ? (
+                          <>
+                            <div className="text-[13px] text-[#1A1A18]">{item.owner.full_name}</div>
+                            {item.owner_email || item.owner?.email ? (
+                              <div className="mt-0.5 text-xs text-[#8A8A84]">
+                                {item.owner_email || item.owner?.email}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <Badge variant="soft" tone="muted">
+                              {item.owner?.full_name ?? 'Unassigned'}
+                            </Badge>
+                            {item.owner_email ? (
+                              <div className="mt-1 text-xs text-[#8A8A84]">{item.owner_email}</div>
+                            ) : null}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 align-middle text-[13px] text-[#5C5C56]">
+                        {item.owner?.phone || item.owner_email || '—'}
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        <Badge variant="soft" tone={statusTone(item.status)}>
+                          {statusLabel(item.status)}
+                        </Badge>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 align-middle">
+                        <LaunchProgressCompact source={launchSource(item)} showCount />
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        <Badge variant="soft" tone={paymentStatusTone(item.payment_status)}>
+                          {paymentStateLabel(item.payment_status)}
+                        </Badge>
+                      </td>
+                      <ActionsTd className="px-5 py-4">
+                        <ActionButton
+                          variant="outline"
+                          onClick={() => navigate(`/franchises/${item.id}`)}
+                        >
+                          View
+                        </ActionButton>
+                        <ActionSelect
+                          value=""
+                          aria-label={`Change status for ${item.name}`}
+                          onChange={(e) => {
+                            const next = e.target.value as FranchiseStatus;
+                            if (!next) return;
+                            setStatusTarget({ franchise: item, next });
+                          }}
+                        >
+                          <option value="">
+                            {item.status === 'ACTIVE' ? 'Deactivate…' : 'Activate…'}
+                          </option>
+                          {FRANCHISE_STATUSES.filter((s) => s !== item.status).map((status) => (
+                            <option key={status} value={status}>
+                              {statusLabel(status)}
+                            </option>
+                          ))}
+                        </ActionSelect>
+                        {moreMenu(item, false)}
+                      </ActionsTd>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      {/* Prototype-style outlet cards for at-a-glance view */}
-      {!listQuery.isLoading && items.length > 0 ? (
-        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
-          {items.map((item) => (
-            <button
-              key={`card-${item.id}`}
-              type="button"
-              onClick={() => navigate(`/franchises/${item.id}`)}
-              className="overflow-hidden rounded-[10px] border border-[#E0DDD5] bg-white text-left"
-            >
-              <div
-                className="px-3 py-2.5"
-                style={{
-                  background: item.status === 'ACTIVE' ? '#0D4F2E' : '#8A8A84',
-                }}
-              >
-                <div className="text-[13px] font-bold text-white">{item.name}</div>
-                <div className="mt-0.5 text-[10px] text-white/55">
-                  {item.city || '—'} · {item.tier || 'Partner'} Partner
-                </div>
-              </div>
-              <div className="px-3 py-2.5">
-                <div className="mb-2 grid grid-cols-2 gap-2">
-                  <div className="rounded-md bg-[#FDFAF4] p-2 text-center">
-                    <div className="font-serif text-[15px] font-bold text-[#1A7A4A]">
+          <div className="grid gap-3 lg:hidden">
+            {items.map((item) => {
+              const location = franchiseLocationLine(item);
+              return (
+                <AdminListCard key={`card-${item.id}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        to={`/franchises/${item.id}`}
+                        className="text-[15px] font-semibold text-[#1A1A18] hover:text-[#1A7A4A]"
+                      >
+                        {item.name}
+                      </Link>
+                      {location ? <div className="mt-0.5 text-xs text-[#8A8A84]">{location}</div> : null}
+                    </div>
+                    <Badge variant="soft" tone={statusTone(item.status)}>
                       {statusLabel(item.status)}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">Status</div>
+                    </Badge>
                   </div>
-                  <div className="rounded-md bg-[#FDFAF4] p-2 text-center">
-                    <div className="font-serif text-[15px] font-bold text-[#E8621A]">
-                      {item.launch_progress_total
-                        ? `${item.launch_progress_completed}/${item.launch_progress_total}`
-                        : '—'}
+
+                  <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-[#F0EEE8] pt-3 text-sm">
+                    <div>
+                      <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                        Owner
+                      </dt>
+                      <dd className="mt-1 text-[13px] text-[#1A1A18]">
+                        {item.owner?.full_name ?? 'Unassigned'}
+                      </dd>
                     </div>
-                    <div className="text-[9px] uppercase tracking-[.05em] text-[#8A8A84]">Launch</div>
+                    <div>
+                      <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                        Payment
+                      </dt>
+                      <dd className="mt-1">
+                        <Badge variant="soft" tone={paymentStatusTone(item.payment_status)}>
+                          {paymentStateLabel(item.payment_status)}
+                        </Badge>
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                        Launch
+                      </dt>
+                      <dd className="mt-1 whitespace-nowrap">
+                        <LaunchProgressCompact source={launchSource(item)} showCount />
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-4 flex items-center gap-1.5 border-t border-[#F0EEE8] pt-3">
+                    <ActionButton
+                      variant="outline"
+                      onClick={() => navigate(`/franchises/${item.id}`)}
+                    >
+                      View
+                    </ActionButton>
+                    {moreMenu(item, true)}
                   </div>
-                </div>
-                <div className="text-[10px] text-[#8A8A84]">{item.address || 'No address'}</div>
-              </div>
-            </button>
-          ))}
-        </div>
+                </AdminListCard>
+              );
+            })}
+          </div>
+        </>
       ) : null}
 
       {showAdd ? (
-        <Modal title="Add Outlet" wide onClose={() => setShowAdd(false)}>
+        <Modal title="Add Outlet" wide onClose={closeAdd}>
           <OutletForm
             mode="create"
             initial={emptyOutletForm()}
             submitting={createMutation.isPending}
-            onCancel={() => setShowAdd(false)}
+            formError={createError}
+            apiFieldErrors={createFieldErrors}
+            onCancel={closeAdd}
+            onClearSubmitError={clearAddSubmitError}
             onSubmit={(values) => createMutation.mutate(values)}
           />
         </Modal>
@@ -404,114 +586,159 @@ export function FranchisesPage() {
 
       {ownerTarget ? (
         <Modal
-          title={ownerMode === 'create' ? 'Create Franchise Owner' : 'Assign Franchise Owner'}
-          onClose={() => setOwnerTarget(null)}
+          title="Create Franchise Owner"
+          onClose={() => {
+            setOwnerTarget(null);
+            clearOwnerSubmitError();
+          }}
         >
           <p className="mb-3 text-sm text-[#4A4A46]">
-            Manage owner for <strong>{ownerTarget.name}</strong>. Passwords are never stored in
+            Create an owner for <strong>{ownerTarget.name}</strong>. Passwords are never stored in
             profiles or shown in this UI.
           </p>
 
-          <div className="mb-4 grid grid-cols-2 gap-2">
+          {ownerFormError ? (
+            <div className="mb-3">
+              <ErrorBanner message={ownerFormError} />
+            </div>
+          ) : null}
+
+          <Field
+            label="Owner Name"
+            value={ownerFullName}
+            error={ownerFieldErrors.full_name}
+            onChange={(e) => {
+              setOwnerFullName(e.target.value);
+              if (ownerFieldErrors.full_name || ownerFormError) {
+                setOwnerFieldErrors((current) => {
+                  if (!current.full_name) return current;
+                  const next = { ...current };
+                  delete next.full_name;
+                  return next;
+                });
+                setOwnerFormError(null);
+              }
+            }}
+            required
+          />
+          <Field
+            label="Owner Email"
+            type="email"
+            value={ownerEmail}
+            error={ownerFieldErrors.email}
+            onChange={(e) => {
+              setOwnerEmail(e.target.value);
+              if (ownerFieldErrors.email || ownerFormError) {
+                setOwnerFieldErrors((current) => {
+                  if (!current.email) return current;
+                  const next = { ...current };
+                  delete next.email;
+                  return next;
+                });
+                setOwnerFormError(null);
+              }
+            }}
+            required
+          />
+          <Field
+            label="Phone"
+            value={ownerPhone}
+            error={ownerFieldErrors.phone}
+            placeholder="+919876543210"
+            onChange={(e) => {
+              setOwnerPhone(e.target.value);
+              if (ownerFieldErrors.phone || ownerFormError) {
+                setOwnerFieldErrors((current) => {
+                  if (!current.phone) return current;
+                  const next = { ...current };
+                  delete next.phone;
+                  return next;
+                });
+                setOwnerFormError(null);
+              }
+            }}
+          />
+          <p className="mb-4 text-xs text-[#8A8A84]">
+            Supabase Auth will email a secure password setup / invite link. No permanent
+            password is displayed here.
+          </p>
+          <div className="flex justify-end gap-2">
             <Button
-              size="sm"
-              variant={ownerMode === 'create' ? 'primary' : 'outline'}
-              onClick={() => setOwnerMode('create')}
+              variant="muted"
+              onClick={() => {
+                setOwnerTarget(null);
+                clearOwnerSubmitError();
+              }}
             >
-              Create Owner
+              Cancel
             </Button>
             <Button
-              size="sm"
-              variant={ownerMode === 'assign' ? 'primary' : 'outline'}
-              onClick={() => setOwnerMode('assign')}
+              disabled={createOwnerMutation.isPending}
+              onClick={() => {
+                const errors = validateOwnerForm(
+                  {
+                    full_name: ownerFullName,
+                    email: ownerEmail,
+                    phone: ownerPhone,
+                    role: 'FRANCHISE_OWNER',
+                    franchise_id: ownerTarget.id,
+                  },
+                  { ownerLabels: true, requireFranchise: false },
+                );
+                setOwnerFieldErrors(errors);
+                if (Object.keys(errors).length > 0) {
+                  setOwnerFormError(null);
+                  return;
+                }
+                setOwnerFormError(null);
+                createOwnerMutation.mutate({
+                  id: ownerTarget.id,
+                  full_name: ownerFullName.trim(),
+                  email: ownerEmail.trim(),
+                  phone: ownerPhone.trim() || undefined,
+                });
+              }}
             >
-              Assign Existing
+              {createOwnerMutation.isPending ? 'Creating…' : 'Create Owner'}
             </Button>
           </div>
+        </Modal>
+      ) : null}
 
-          {ownerMode === 'create' ? (
-            <>
-              <Field
-                label="Owner Name"
-                value={ownerFullName}
-                onChange={(e) => setOwnerFullName(e.target.value)}
-                required
-              />
-              <Field
-                label="Owner Email"
-                type="email"
-                value={ownerEmail}
-                onChange={(e) => setOwnerEmail(e.target.value)}
-                required
-              />
-              <Field
-                label="Phone"
-                value={ownerPhone}
-                onChange={(e) => setOwnerPhone(e.target.value)}
-              />
-              <p className="mb-4 text-xs text-[#8A8A84]">
-                Supabase Auth will email a secure password setup / invite link. No permanent
-                password is displayed here.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="muted" onClick={() => setOwnerTarget(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  disabled={
-                    createOwnerMutation.isPending ||
-                    !ownerFullName.trim() ||
-                    !ownerEmail.trim()
-                  }
-                  onClick={() =>
-                    createOwnerMutation.mutate({
-                      id: ownerTarget.id,
-                      full_name: ownerFullName.trim(),
-                      email: ownerEmail.trim(),
-                      phone: ownerPhone.trim() || undefined,
-                    })
-                  }
-                >
-                  {createOwnerMutation.isPending ? 'Creating…' : 'Create Owner'}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <Field
-                label="Owner Profile ID"
-                value={ownerProfileId}
-                onChange={(e) => setOwnerProfileId(e.target.value)}
-                placeholder="UUID from profiles table"
-              />
-              <Field
-                label="Owner Email"
-                type="email"
-                value={ownerEmail}
-                onChange={(e) => setOwnerEmail(e.target.value)}
-                placeholder="Must match an existing auth user if profile ID omitted"
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="muted" onClick={() => setOwnerTarget(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  disabled={
-                    ownerMutation.isPending || (!ownerProfileId.trim() && !ownerEmail.trim())
-                  }
-                  onClick={() =>
-                    ownerMutation.mutate({
-                      id: ownerTarget.id,
-                      owner_profile_id: ownerProfileId.trim() || undefined,
-                      owner_email: ownerEmail.trim() || undefined,
-                    })
-                  }
-                >
-                  {ownerMutation.isPending ? 'Assigning…' : 'Assign Owner'}
-                </Button>
-              </div>
-            </>
-          )}
+      {deleteTarget ? (
+        <Modal
+          title={DELETE_FRANCHISE_TITLE}
+          onClose={() => {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }}
+        >
+          <p className="text-sm text-[#1A1A18]">{DELETE_FRANCHISE_CONFIRM_MESSAGE}</p>
+          <p className="mt-1 text-sm font-medium text-[#5C5C56]">{deleteTarget.name}</p>
+          {deleteError ? (
+            <div className="mt-3">
+              <ErrorBanner message={deleteError} />
+            </div>
+          ) : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="muted"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
         </Modal>
       ) : null}
     </div>

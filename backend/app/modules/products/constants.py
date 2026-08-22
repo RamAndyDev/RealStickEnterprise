@@ -34,3 +34,9 @@ ALLOWED_IMAGE_EXTENSIONS: dict[str, str] = {
     'image/png': 'png',
     'image/webp': 'webp',
 }
+
+# Safe product delete: hard-delete only when no business/historical references exist.
+PRODUCT_DELETE_BLOCKED_DETAIL = (
+    'This product cannot be deleted because it is already used in existing business records. '
+    'Deactivate it instead.'
+)

@@ -1,37 +1,28 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.roles import UserRole
+from app.core.validation import strip_text, validate_email, validate_phone, validate_required_text
 from app.modules.auth.identity import validate_login_id
 
-_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+USER_DELETE_BLOCKED_DETAIL = (
+    'This user cannot be deleted because they are referenced by existing business records. '
+    'Deactivate the user instead.'
+)
+LAST_ADMIN_DELETE_DETAIL = 'Cannot delete the last active system admin.'
+SELF_DELETE_DETAIL = 'You cannot delete your own account.'
 
 
 def _normalize_email(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('email must be a string')
-    stripped = value.strip().lower()
-    if not stripped:
-        return None
-    if not _EMAIL_RE.match(stripped):
-        raise ValueError('Invalid email format')
-    return stripped
+    return validate_email(value, required=False)
 
 
 def _strip_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('value must be a string')
-    stripped = value.strip()
-    return stripped or None
+    return strip_text(value)
 
 
 class ManagedUser(BaseModel):
@@ -46,6 +37,7 @@ class ManagedUser(BaseModel):
     franchise_id: UUID | None = None
     franchise_name: str | None = None
     is_active: bool
+    is_logged_in: bool | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -72,15 +64,12 @@ class AdminUserCreate(BaseModel):
     @field_validator('full_name', mode='before')
     @classmethod
     def require_name(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Name is required')
-        return stripped
+        return validate_required_text(value, field_name='Name', max_length=200)
 
     @field_validator('email', mode='before')
     @classmethod
     def require_email(cls, value: object) -> str:
-        normalized = _normalize_email(value)
+        normalized = validate_email(value, required=True)
         if not normalized:
             raise ValueError('Email is required')
         return normalized
@@ -88,7 +77,7 @@ class AdminUserCreate(BaseModel):
     @field_validator('phone', mode='before')
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
-        return _strip_text(value)
+        return validate_phone(value, required=False)
 
     @model_validator(mode='after')
     def validate_role_franchise(self) -> AdminUserCreate:
@@ -113,15 +102,12 @@ class AdminUserUpdate(BaseModel):
     def strip_name(cls, value: object) -> str | None:
         if value is None:
             return None
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Name cannot be empty')
-        return stripped
+        return validate_required_text(value, field_name='Name', max_length=200)
 
     @field_validator('phone', mode='before')
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
-        return _strip_text(value)
+        return validate_phone(value, required=False)
 
 
 class EmployeeCreate(BaseModel):
@@ -138,10 +124,7 @@ class EmployeeCreate(BaseModel):
     @field_validator('full_name', mode='before')
     @classmethod
     def require_name(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Employee name is required')
-        return stripped
+        return validate_required_text(value, field_name='Employee name', max_length=200)
 
     @field_validator('login_id', mode='before')
     @classmethod
@@ -159,7 +142,7 @@ class EmployeeCreate(BaseModel):
     @field_validator('phone', mode='before')
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
-        return _strip_text(value)
+        return validate_phone(value, required=False)
 
     @model_validator(mode='after')
     def confirm_matches(self) -> EmployeeCreate:
@@ -181,15 +164,12 @@ class EmployeeUpdate(BaseModel):
     def strip_name(cls, value: object) -> str | None:
         if value is None:
             return None
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Employee name cannot be empty')
-        return stripped
+        return validate_required_text(value, field_name='Employee name', max_length=200)
 
     @field_validator('phone', mode='before')
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
-        return _strip_text(value)
+        return validate_phone(value, required=False)
 
     @field_validator('login_id', mode='before')
     @classmethod

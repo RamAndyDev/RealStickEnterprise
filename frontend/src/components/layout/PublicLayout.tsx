@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import { PUBLIC_NAV } from '../../features/auth/nav';
+import { RealStickLogo } from '../branding/RealStickLogo';
 import { useDocumentMeta } from '../seo/useDocumentMeta';
 
 export function PublicLayout() {
@@ -28,10 +29,8 @@ export function PublicLayout() {
       </a>
       <header className="sticky top-0 z-30 border-b border-[#E0DDD5]/80 bg-[#FDFAF4]/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Link to="/" className="group flex min-h-11 items-center gap-2" aria-label="RealStick home">
-            <span className="font-serif text-2xl font-bold tracking-tight text-[#0D4F2E] sm:text-[1.7rem]">
-              RealStick™
-            </span>
+          <Link to="/" className="group flex min-h-11 items-center" aria-label="RealStick home">
+            <RealStickLogo className="h-10 w-auto sm:h-12" />
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">

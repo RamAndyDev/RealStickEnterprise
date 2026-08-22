@@ -1,6 +1,7 @@
 import type {
   FranchiseDetail,
   FranchiseListResponse,
+  FranchiseOfflinePaymentPayload,
   FranchiseStatus,
   FranchiseWritePayload,
   LaunchChecklistItem,
@@ -51,6 +52,10 @@ export async function updateFranchiseStatus(
   return data;
 }
 
+export async function deleteFranchise(id: string): Promise<void> {
+  await api.delete(`/admin/franchises/${id}`);
+}
+
 export async function assignFranchiseOwner(
   id: string,
   body: { owner_profile_id?: string; owner_email?: string },
@@ -80,6 +85,14 @@ export async function createFranchiseOwner(
     `/admin/franchises/${id}/owners`,
     body,
   );
+  return data;
+}
+
+export async function recordOfflineFranchisePayment(
+  id: string,
+  payload: FranchiseOfflinePaymentPayload,
+): Promise<FranchiseDetail> {
+  const { data } = await api.post<FranchiseDetail>(`/admin/franchises/${id}/payments`, payload);
   return data;
 }
 

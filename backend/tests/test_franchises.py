@@ -1,5 +1,6 @@
 from uuid import uuid4
 
+from app.modules.franchises.schemas import OWNER_EMAIL_EXISTS_DETAIL
 from tests.conftest import (
     ADMIN_ID,
     EMPLOYEE_ID,
@@ -44,6 +45,124 @@ def test_admin_can_create_franchise(client, auth_header_factory):
     assert body['status'] == 'SETUP'
     assert body['launch_progress_total'] >= 1
     assert len(body['launch_checklist']) >= 1
+
+
+def test_admin_can_create_franchise_with_new_owner(client, auth_header_factory, fake_db):
+    before_ids = {row['id'] for row in fake_db.tables['franchises']}
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Kondapur Outlet',
+            'city': 'Hyderabad',
+            'owner_full_name': 'Kondapur Owner',
+            'owner_email': 'kondapur.owner@realstick.in',
+            'owner_phone': '9876543210',
+            'tier': 'Founder',
+            'code': 'KOND-01',
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['name'] == 'Kondapur Outlet'
+    assert body['owner_email'] == 'kondapur.owner@realstick.in'
+    assert body['owner'] is not None
+    assert body['owner']['full_name'] == 'Kondapur Owner'
+    assert body['owner']['is_active'] is True
+
+    created_ids = {row['id'] for row in fake_db.tables['franchises']} - before_ids
+    assert created_ids == {body['id']}
+    profile = next(p for p in fake_db.tables['profiles'] if p['id'] == body['owner']['id'])
+    assert profile['role'] == 'FRANCHISE_OWNER'
+    assert profile['franchise_id'] == body['id']
+    assert any(u.email == 'kondapur.owner@realstick.in' for u in fake_db.auth.admin._users)
+
+
+def test_duplicate_owner_email_does_not_create_franchise(client, auth_header_factory, fake_db):
+    before_franchises = list(fake_db.tables['franchises'])
+    before_profiles = list(fake_db.tables['profiles'])
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Orphan Risk Outlet',
+            'owner_full_name': 'Existing Email Owner',
+            'owner_email': 'owner@realstick.in',
+            'code': 'ORPHAN-01',
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()['detail'] == OWNER_EMAIL_EXISTS_DETAIL
+    assert 'assign' not in response.json()['detail'].lower()
+    assert fake_db.tables['franchises'] == before_franchises
+    assert not any(row.get('name') == 'Orphan Risk Outlet' for row in fake_db.tables['franchises'])
+    assert not any(row.get('code') == 'ORPHAN-01' for row in fake_db.tables['franchises'])
+    assert fake_db.tables['profiles'] == before_profiles
+
+
+def test_owner_create_failure_rolls_back_new_franchise(client, auth_header_factory, fake_db, monkeypatch):
+    from fastapi import HTTPException
+
+    from app.modules.franchises.service import FranchiseService
+
+    def fail_owner(self, franchise_id, data, actor):
+        raise HTTPException(status_code=400, detail='Unable to create franchise owner profile')
+
+    monkeypatch.setattr(FranchiseService, 'create_owner', fail_owner)
+    before_franchises = list(fake_db.tables['franchises'])
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Rollback Outlet',
+            'owner_full_name': 'Rollback Owner',
+            'owner_email': 'rollback.owner@realstick.in',
+            'code': 'ROLLBACK-01',
+        },
+    )
+    assert response.status_code == 400
+    assert not any(row.get('name') == 'Rollback Outlet' for row in fake_db.tables['franchises'])
+    assert not any(row.get('code') == 'ROLLBACK-01' for row in fake_db.tables['franchises'])
+    assert fake_db.tables['franchises'] == before_franchises
+
+
+def test_failed_owner_create_then_retry_creates_exactly_one_outlet(client, auth_header_factory, fake_db):
+    before_ids = {row['id'] for row in fake_db.tables['franchises']}
+    failed = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Retry Outlet',
+            'owner_full_name': 'Retry Owner',
+            'owner_email': 'owner@realstick.in',
+            'code': 'RETRY-01',
+        },
+    )
+    assert failed.status_code == 409
+    assert {row['id'] for row in fake_db.tables['franchises']} == before_ids
+
+    retry = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Retry Outlet',
+            'owner_full_name': 'Retry Owner',
+            'owner_email': 'retry.owner@realstick.in',
+            'code': 'RETRY-01',
+        },
+    )
+    assert retry.status_code == 201
+    body = retry.json()
+    created_ids = {row['id'] for row in fake_db.tables['franchises']} - before_ids
+    assert created_ids == {body['id']}
+    assert body['owner']['full_name'] == 'Retry Owner'
+    assert body['owner_email'] == 'retry.owner@realstick.in'
+    owners = [
+        p
+        for p in fake_db.tables['profiles']
+        if p.get('franchise_id') == body['id'] and p.get('role') == 'FRANCHISE_OWNER' and p.get('is_active')
+    ]
+    assert len(owners) == 1
 
 
 def test_admin_can_create_franchise_owner(client, auth_header_factory, fake_db):
@@ -144,6 +263,8 @@ def test_duplicate_or_invalid_owner_create_handled(client, auth_header_factory):
         json={'full_name': 'Existing', 'email': 'owner@realstick.in'},
     )
     assert duplicate.status_code == 409
+    assert duplicate.json()['detail'] == 'Email already exists. Please use a different email address.'
+    assert 'assign' not in duplicate.json()['detail'].lower()
 
 
 def test_create_owner_reassignment_deactivates_previous(client, auth_header_factory, fake_db):
@@ -413,3 +534,271 @@ def test_launch_checklist_progress_retrieval_works(client, auth_header_factory):
     )
     assert updated.status_code == 200
     assert updated.json()['is_completed'] is True
+
+
+def _offline_payment_payload(**overrides):
+    body = {
+        'amount': 250000.50,
+        'paid_at': '2026-08-20',
+        'payment_method': 'BANK_TRANSFER',
+        'reference_number': 'NEFT-8891',
+        'notes': 'Received at head office',
+    }
+    body.update(overrides)
+    return body
+
+
+def test_admin_can_record_offline_franchise_payment(client, auth_header_factory, fake_db):
+    before = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_B)
+    ]
+    assert before == []
+
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['payment_status'] == 'COMPLETED'
+    assert len(body['payments']) == 1
+    payment = body['payments'][0]
+    assert payment['status'] == 'COMPLETED'
+    assert payment['amount'] == 250000.50
+    assert payment['payment_method'] == 'BANK_TRANSFER'
+    assert payment['reference_number'] == 'NEFT-8891'
+    assert payment['notes'] == 'Received at head office'
+    assert payment['paid_at'].startswith('2026-08-20')
+
+    stored = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_B)
+    ]
+    assert len(stored) == 1
+    assert stored[0]['status'] == 'COMPLETED'
+
+
+def test_non_admin_cannot_record_offline_franchise_payment(client, auth_header_factory):
+    owner = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(OWNER_ID, 'owner@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    employee = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(EMPLOYEE_ID, 'employee@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    assert owner.status_code == 403
+    assert employee.status_code == 403
+
+
+def test_offline_payment_rejects_non_positive_amount(client, auth_header_factory):
+    zero = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(amount=0),
+    )
+    negative = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(amount=-10),
+    )
+    extra_decimals = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(amount='12.345'),
+    )
+    assert zero.status_code == 422
+    assert negative.status_code == 422
+    assert extra_decimals.status_code == 422
+
+
+def test_offline_payment_rejects_invalid_payment_method(client, auth_header_factory):
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(payment_method='CARD'),
+    )
+    assert response.status_code == 422
+
+    missing = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(payment_method='NOT_A_METHOD'),
+    )
+    assert missing.status_code == 422
+
+    bad_date = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_B}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(paid_at='21-08-2026'),
+    )
+    assert bad_date.status_code == 422
+
+
+def test_offline_payment_preserves_existing_payment_history(client, auth_header_factory, fake_db):
+    existing = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_A)
+    ]
+    assert len(existing) == 1
+    original_id = existing[0]['id']
+    original_reference = existing[0]['reference_number']
+
+    response = client.post(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(
+            amount=1000,
+            payment_method='CASH',
+            reference_number='CASH-002',
+            notes=None,
+        ),
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['payment_status'] == 'COMPLETED'
+    assert len(body['payments']) == 2
+    references = {item['reference_number'] for item in body['payments']}
+    assert original_reference in references
+    assert 'CASH-002' in references
+
+    stored = [
+        row
+        for row in fake_db.tables['franchise_payments']
+        if row['franchise_id'] == str(FRANCHISE_A)
+    ]
+    assert len(stored) == 2
+    assert any(row['id'] == original_id and row['reference_number'] == original_reference for row in stored)
+
+
+def test_offline_payment_unknown_franchise_is_not_found(client, auth_header_factory):
+    response = client.post(
+        f'/api/v1/admin/franchises/{uuid4()}/payments',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json=_offline_payment_payload(),
+    )
+    assert response.status_code == 404
+
+
+# --- Franchise delete ---
+
+
+def _create_unused_franchise(client, auth_header_factory, *, code: str = 'UNUSED-01'):
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Disposable Outlet',
+            'city': 'Hyderabad',
+            'tier': 'Founder',
+            'code': code,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_admin_can_delete_unused_franchise(client, auth_header_factory, fake_db):
+    created = _create_unused_franchise(client, auth_header_factory)
+    franchise_id = created['id']
+    assert any(row['franchise_id'] == franchise_id for row in fake_db.tables['launch_checklist_items'])
+
+    response = client.delete(
+        f'/api/v1/admin/franchises/{franchise_id}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 204
+    assert not any(row['id'] == franchise_id for row in fake_db.tables['franchises'])
+    assert not any(
+        row['franchise_id'] == franchise_id for row in fake_db.tables['launch_checklist_items']
+    )
+    missing = client.get(
+        f'/api/v1/admin/franchises/{franchise_id}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert missing.status_code == 404
+
+
+def test_non_admin_cannot_delete_franchise(client, auth_header_factory):
+    created = _create_unused_franchise(client, auth_header_factory, code='UNUSED-02')
+    for headers in (
+        auth_header_factory(OWNER_ID, 'owner@realstick.in'),
+        auth_header_factory(EMPLOYEE_ID, 'employee@realstick.in'),
+    ):
+        response = client.delete(f'/api/v1/admin/franchises/{created["id"]}', headers=headers)
+        assert response.status_code == 403
+
+
+def test_unknown_franchise_delete_returns_404(client, auth_header_factory):
+    response = client.delete(
+        f'/api/v1/admin/franchises/{uuid4()}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'Franchise not found'
+
+
+def test_referenced_franchise_delete_returns_409(client, auth_header_factory, fake_db):
+    from app.modules.franchises.schemas import FRANCHISE_DELETE_BLOCKED_DETAIL
+
+    payments_before = list(fake_db.tables['franchise_payments'])
+    profiles_before = list(fake_db.tables['profiles'])
+    status_before = next(
+        row['status'] for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A)
+    )
+    response = client.delete(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 409
+    assert response.json()['detail'] == FRANCHISE_DELETE_BLOCKED_DETAIL
+    assert any(row['id'] == str(FRANCHISE_A) for row in fake_db.tables['franchises'])
+    assert fake_db.tables['franchise_payments'] == payments_before
+    assert fake_db.tables['profiles'] == profiles_before
+    status_after = next(
+        row['status'] for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A)
+    )
+    assert status_after == status_before
+    assert status_after == 'ACTIVE'
+
+
+def test_blocked_franchise_delete_does_not_deactivate(client, auth_header_factory, fake_db):
+    franchise = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+    assert franchise['status'] == 'ACTIVE'
+    response = client.delete(
+        f'/api/v1/admin/franchises/{FRANCHISE_A}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 409
+    after = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+    assert after['status'] == 'ACTIVE'
+    assert after['is_archived'] is False
+
+
+def test_successful_franchise_delete_does_not_remove_unrelated_records(
+    client, auth_header_factory, fake_db
+):
+    created = _create_unused_franchise(client, auth_header_factory, code='UNUSED-03')
+    keep = _create_unused_franchise(client, auth_header_factory, code='KEEP-01')
+    payments_before = list(fake_db.tables['franchise_payments'])
+    hyd_before = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+
+    response = client.delete(
+        f'/api/v1/admin/franchises/{created["id"]}',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+    )
+    assert response.status_code == 204
+    remaining_ids = {row['id'] for row in fake_db.tables['franchises']}
+    assert created['id'] not in remaining_ids
+    assert keep['id'] in remaining_ids
+    assert str(FRANCHISE_A) in remaining_ids
+    assert fake_db.tables['franchise_payments'] == payments_before
+    hyd_after = next(row for row in fake_db.tables['franchises'] if row['id'] == str(FRANCHISE_A))
+    assert hyd_after == hyd_before

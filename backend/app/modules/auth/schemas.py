@@ -19,6 +19,7 @@ class MeResponse(BaseModel):
     phone: str | None = None
     is_active: bool
     created_at: datetime | None = None
+    franchise_owner_audit_enabled: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -39,6 +40,7 @@ class LoginResponse(BaseModel):
     refresh_token: str
     token_type: str = 'bearer'
     expires_in: int | None = None
+    employee_session_id: UUID | None = None
 
 
 class ChangePasswordRequest(BaseModel):

@@ -1,6 +1,7 @@
 import type {
   EmployeeCreatePayload,
   EmployeeListResponse,
+  EmployeeSessionListResponse,
   EmployeeUpdatePayload,
   ManagedUser,
   PasswordResetResponse,
@@ -46,8 +47,19 @@ export async function updateAdminUser(id: string, payload: UserUpdatePayload): P
   return data;
 }
 
+export async function deleteAdminUser(id: string): Promise<void> {
+  await api.delete(`/admin/users/${id}`);
+}
+
 export async function resetAdminUserPassword(id: string): Promise<PasswordResetResponse> {
   const { data } = await api.post<PasswordResetResponse>(`/admin/users/${id}/reset-password`);
+  return data;
+}
+
+export async function listEmployeeSessions(employeeId: string): Promise<EmployeeSessionListResponse> {
+  const { data } = await api.get<EmployeeSessionListResponse>(
+    `/owner/employees/${employeeId}/sessions`,
+  );
   return data;
 }
 

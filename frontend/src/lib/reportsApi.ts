@@ -1,4 +1,10 @@
 import { api } from './api';
+import { reportRequestParams } from '../features/reports/reportDateRange';
+import {
+  filenameFromContentDisposition,
+  salesReportDownloadName,
+  triggerBrowserDownload,
+} from '../features/reports/reportExport';
 import type {
   AdminDashboard,
   DailyRevenueResponse,
@@ -10,24 +16,63 @@ import type {
   ReportSummary,
 } from '../types/reports';
 
-export async function fetchReportSummary(period: ReportPeriod): Promise<ReportSummary> {
-  const { data } = await api.get<ReportSummary>('/reports/summary', { params: { period } });
+export async function fetchReportSummary(
+  period: ReportPeriod,
+  startDate = '',
+  endDate = '',
+): Promise<ReportSummary> {
+  const { data } = await api.get<ReportSummary>('/reports/summary', {
+    params: reportRequestParams(period, startDate, endDate),
+  });
   return data;
 }
 
-export async function fetchDailyRevenue(period: ReportPeriod): Promise<DailyRevenueResponse> {
-  const { data } = await api.get<DailyRevenueResponse>('/reports/daily', { params: { period } });
+export async function fetchDailyRevenue(
+  period: ReportPeriod,
+  startDate = '',
+  endDate = '',
+): Promise<DailyRevenueResponse> {
+  const { data } = await api.get<DailyRevenueResponse>('/reports/daily', {
+    params: reportRequestParams(period, startDate, endDate),
+  });
   return data;
 }
 
-export async function fetchProductSales(period: ReportPeriod): Promise<ProductSalesResponse> {
-  const { data } = await api.get<ProductSalesResponse>('/reports/products', { params: { period } });
+export async function fetchProductSales(
+  period: ReportPeriod,
+  startDate = '',
+  endDate = '',
+): Promise<ProductSalesResponse> {
+  const { data } = await api.get<ProductSalesResponse>('/reports/products', {
+    params: reportRequestParams(period, startDate, endDate),
+  });
   return data;
 }
 
-export async function fetchPaymentTotals(period: ReportPeriod): Promise<PaymentTotalsResponse> {
-  const { data } = await api.get<PaymentTotalsResponse>('/reports/payments', { params: { period } });
+export async function fetchPaymentTotals(
+  period: ReportPeriod,
+  startDate = '',
+  endDate = '',
+): Promise<PaymentTotalsResponse> {
+  const { data } = await api.get<PaymentTotalsResponse>('/reports/payments', {
+    params: reportRequestParams(period, startDate, endDate),
+  });
   return data;
+}
+
+export async function exportSalesReport(
+  period: ReportPeriod,
+  startDate = '',
+  endDate = '',
+): Promise<void> {
+  const response = await api.get<Blob>('/reports/export', {
+    params: reportRequestParams(period, startDate, endDate),
+    responseType: 'blob',
+  });
+  const filename =
+    filenameFromContentDisposition(response.headers['content-disposition']) ??
+    salesReportDownloadName(period, startDate, endDate);
+  triggerBrowserDownload(response.data, filename);
 }
 
 export async function fetchAdminDashboard(): Promise<AdminDashboard> {

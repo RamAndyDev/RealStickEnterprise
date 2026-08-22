@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 
-import { Button, Field, SelectField } from '../../components/ui';
+import { Button, ErrorBanner, Field, SelectField } from '../../components/ui';
+import { validateIsoDate, validatePhone, validateRequiredText } from '../../lib/validation';
 import {
   FRANCHISE_STATUSES,
   FRANCHISE_TIERS,
@@ -9,6 +10,10 @@ import {
   type FranchiseTier,
   type FranchiseWritePayload,
 } from '../../types/franchise';
+import {
+  validateOwnerForm,
+  type OwnerCreateFieldErrors,
+} from '../users/ownerForm';
 
 export type OutletFormValues = {
   name: string;
@@ -16,14 +21,14 @@ export type OutletFormValues = {
   state: string;
   address: string;
   postal_code: string;
+  owner_full_name: string;
   owner_email: string;
+  owner_phone: string;
   tier: FranchiseTier;
   open_date: string;
   code: string;
   status: FranchiseStatus;
 };
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function emptyOutletForm(defaults?: Partial<OutletFormValues>): OutletFormValues {
   return {
@@ -32,7 +37,9 @@ export function emptyOutletForm(defaults?: Partial<OutletFormValues>): OutletFor
     state: '',
     address: '',
     postal_code: '',
+    owner_full_name: '',
     owner_email: '',
+    owner_phone: '',
     tier: 'Founder',
     open_date: '',
     code: '',
@@ -48,7 +55,9 @@ export function franchiseToForm(franchise: Franchise): OutletFormValues {
     state: franchise.state ?? '',
     address: franchise.address ?? '',
     postal_code: franchise.postal_code ?? '',
+    owner_full_name: franchise.owner?.full_name ?? '',
     owner_email: franchise.owner_email ?? '',
+    owner_phone: franchise.owner?.phone ?? '',
     tier: (FRANCHISE_TIERS.includes(franchise.tier as FranchiseTier)
       ? franchise.tier
       : 'Founder') as FranchiseTier,
@@ -60,12 +69,44 @@ export function franchiseToForm(franchise: Franchise): OutletFormValues {
 
 export function validateOutletForm(
   values: OutletFormValues,
-  { requireStatus = true }: { requireStatus?: boolean } = {},
+  {
+    requireStatus = true,
+    requireOwner = false,
+  }: { requireStatus?: boolean; requireOwner?: boolean } = {},
 ): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (!values.name.trim()) errors.name = 'Outlet name is required';
-  if (values.owner_email.trim() && !EMAIL_RE.test(values.owner_email.trim())) {
-    errors.owner_email = 'Enter a valid email address';
+  const nameError = validateRequiredText(values.name, 'Outlet name is required');
+  if (nameError) errors.name = nameError;
+  if (requireOwner) {
+    const ownerErrors = validateOwnerForm(
+      {
+        full_name: values.owner_full_name,
+        email: values.owner_email,
+        phone: values.owner_phone,
+        role: 'FRANCHISE_OWNER',
+        franchise_id: '',
+      },
+      { ownerLabels: true, requireFranchise: false },
+    );
+    if (ownerErrors.full_name) errors.owner_full_name = ownerErrors.full_name;
+    if (ownerErrors.email) errors.owner_email = ownerErrors.email;
+    if (ownerErrors.phone) errors.owner_phone = ownerErrors.phone;
+  } else if (values.owner_email.trim()) {
+    const ownerErrors = validateOwnerForm(
+      {
+        full_name: values.owner_full_name || 'placeholder',
+        email: values.owner_email,
+        phone: values.owner_phone,
+        role: 'FRANCHISE_OWNER',
+        franchise_id: '',
+      },
+      { ownerLabels: true, requireFranchise: false },
+    );
+    if (ownerErrors.email) errors.owner_email = ownerErrors.email;
+    if (ownerErrors.phone) errors.owner_phone = ownerErrors.phone;
+  } else {
+    const phoneError = validatePhone(values.owner_phone, false);
+    if (phoneError) errors.owner_phone = phoneError;
   }
   if (!FRANCHISE_TIERS.includes(values.tier)) {
     errors.tier = 'Select a valid partner tier';
@@ -74,10 +115,22 @@ export function validateOutletForm(
     errors.status = 'Select a valid franchise status';
   }
   if (values.open_date) {
-    const d = new Date(values.open_date);
-    if (Number.isNaN(d.getTime())) errors.open_date = 'Enter a valid date';
+    const dateError = validateIsoDate(values.open_date);
+    if (dateError) errors.open_date = dateError;
   }
   return errors;
+}
+
+export function toOwnerCreatePayload(values: OutletFormValues): {
+  full_name: string;
+  email: string;
+  phone?: string;
+} {
+  return {
+    full_name: values.owner_full_name.trim(),
+    email: values.owner_email.trim(),
+    phone: values.owner_phone.trim() || undefined,
+  };
 }
 
 export function toWritePayload(values: OutletFormValues, includeStatus: boolean): FranchiseWritePayload {
@@ -91,7 +144,13 @@ export function toWritePayload(values: OutletFormValues, includeStatus: boolean)
     tier: values.tier,
     open_date: values.open_date || null,
     code: values.code.trim() || null,
-    ...(includeStatus ? { status: values.status } : {}),
+    ...(includeStatus
+      ? {
+          status: values.status,
+          owner_full_name: values.owner_full_name.trim() || null,
+          owner_phone: values.owner_phone.trim() || null,
+        }
+      : {}),
   };
 }
 
@@ -99,77 +158,113 @@ export function OutletForm({
   initial,
   mode,
   submitting,
+  formError = null,
+  apiFieldErrors,
   onSubmit,
   onCancel,
+  onClearSubmitError,
 }: {
   initial: OutletFormValues;
   mode: 'create' | 'edit';
   submitting: boolean;
+  formError?: string | null;
+  apiFieldErrors?: OwnerCreateFieldErrors;
   onSubmit: (values: OutletFormValues) => void;
   onCancel: () => void;
+  onClearSubmitError?: () => void;
 }) {
   const [values, setValues] = useState<OutletFormValues>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const isCreate = mode === 'create';
 
-  const titleAction = useMemo(() => (mode === 'create' ? 'Add Outlet' : 'Save Changes'), [mode]);
+  const titleAction = useMemo(() => (isCreate ? 'Add Outlet' : 'Save Changes'), [isCreate]);
+  const ownerNameError = errors.owner_full_name || apiFieldErrors?.full_name;
+  const ownerEmailError = errors.owner_email || apiFieldErrors?.email;
+  const ownerPhoneError = errors.owner_phone || apiFieldErrors?.phone;
+
+  function update<K extends keyof OutletFormValues>(key: K, value: OutletFormValues[K]) {
+    setValues((current) => ({ ...current, [key]: value }));
+    if (errors[key]) {
+      setErrors((current) => {
+        if (!current[key]) return current;
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
+    if (formError || apiFieldErrors?.full_name || apiFieldErrors?.email) {
+      onClearSubmitError?.();
+    }
+  }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const nextErrors = validateOutletForm(values, { requireStatus: mode === 'create' });
+    const nextErrors = validateOutletForm(values, {
+      requireStatus: isCreate,
+      requireOwner: isCreate,
+    });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     onSubmit(values);
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} noValidate={isCreate}>
+      {formError ? (
+        <div className="mb-3">
+          <ErrorBanner message={formError} />
+        </div>
+      ) : null}
+
       <div className="grid gap-0 sm:grid-cols-2 sm:gap-x-3">
         <Field
           label="Outlet Name"
           value={values.name}
-          onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))}
+          onChange={(e) => update('name', e.target.value)}
           error={errors.name}
           required
         />
         <Field
           label="City"
           value={values.city}
-          onChange={(e) => setValues((v) => ({ ...v, city: e.target.value }))}
+          onChange={(e) => update('city', e.target.value)}
         />
       </div>
 
       <Field
         label="Address"
         value={values.address}
-        onChange={(e) => setValues((v) => ({ ...v, address: e.target.value }))}
+        onChange={(e) => update('address', e.target.value)}
       />
 
       <div className="grid gap-0 sm:grid-cols-2 sm:gap-x-3">
         <Field
           label="State"
           value={values.state}
-          onChange={(e) => setValues((v) => ({ ...v, state: e.target.value }))}
+          onChange={(e) => update('state', e.target.value)}
         />
         <Field
           label="Postal Code"
           value={values.postal_code}
-          onChange={(e) => setValues((v) => ({ ...v, postal_code: e.target.value }))}
+          onChange={(e) => update('postal_code', e.target.value)}
         />
       </div>
 
-      <Field
-        label="Owner Email"
-        type="email"
-        value={values.owner_email}
-        onChange={(e) => setValues((v) => ({ ...v, owner_email: e.target.value }))}
-        error={errors.owner_email}
-      />
+      {isCreate ? null : (
+        <Field
+          label="Owner Email"
+          type="email"
+          value={values.owner_email}
+          onChange={(e) => update('owner_email', e.target.value)}
+          error={errors.owner_email}
+        />
+      )}
 
       <div className="grid gap-0 sm:grid-cols-2 sm:gap-x-3">
         <SelectField
           label="Tier"
           value={values.tier}
-          onChange={(e) => setValues((v) => ({ ...v, tier: e.target.value as FranchiseTier }))}
+          onChange={(e) => update('tier', e.target.value as FranchiseTier)}
           error={errors.tier}
         >
           {FRANCHISE_TIERS.map((tier) => (
@@ -182,7 +277,7 @@ export function OutletForm({
           label="Open Date"
           type="date"
           value={values.open_date}
-          onChange={(e) => setValues((v) => ({ ...v, open_date: e.target.value }))}
+          onChange={(e) => update('open_date', e.target.value)}
           error={errors.open_date}
         />
       </div>
@@ -191,14 +286,14 @@ export function OutletForm({
         <Field
           label="Outlet Code"
           value={values.code}
-          onChange={(e) => setValues((v) => ({ ...v, code: e.target.value }))}
+          onChange={(e) => update('code', e.target.value)}
           placeholder="Optional unique code"
         />
-        {mode === 'create' ? (
+        {isCreate ? (
           <SelectField
             label="Status"
             value={values.status}
-            onChange={(e) => setValues((v) => ({ ...v, status: e.target.value as FranchiseStatus }))}
+            onChange={(e) => update('status', e.target.value as FranchiseStatus)}
             error={errors.status}
           >
             {FRANCHISE_STATUSES.map((status) => (
@@ -211,6 +306,41 @@ export function OutletForm({
           <div />
         )}
       </div>
+
+      {isCreate ? (
+        <>
+          <div className="mb-3 mt-1 rounded-xl border border-[#E0DDD5] bg-[#FDFAF4] px-4 py-3">
+            <h3 className="text-sm font-semibold text-[#1A1A18]">Outlet owner</h3>
+            <p className="mt-1 text-xs text-[#8A8A84]">
+              Outlet and Owner will be created together. This creates the outlet and its owner together.
+              A secure password setup invite is emailed. Passwords are never stored in profiles or
+              shown here.
+            </p>
+          </div>
+          <Field
+            label="Owner Name"
+            value={values.owner_full_name}
+            onChange={(e) => update('owner_full_name', e.target.value)}
+            error={ownerNameError}
+            required
+          />
+          <Field
+            label="Owner Email"
+            type="email"
+            value={values.owner_email}
+            onChange={(e) => update('owner_email', e.target.value)}
+            error={ownerEmailError}
+            required
+          />
+          <Field
+            label="Owner Phone"
+            value={values.owner_phone}
+            onChange={(e) => update('owner_phone', e.target.value)}
+            error={ownerPhoneError}
+            placeholder="+919876543210"
+          />
+        </>
+      ) : null}
 
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="muted" onClick={onCancel} disabled={submitting}>

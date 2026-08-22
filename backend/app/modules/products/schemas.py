@@ -7,27 +7,26 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.validation import strip_text, validate_price, validate_required_text
+
 
 def _strip_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('value must be a string')
-    stripped = value.strip()
-    return stripped or None
+    return strip_text(value)
 
 
-def _require_non_negative(value: Decimal | float | int, *, field_name: str) -> Decimal:
-    amount = Decimal(str(value))
-    if amount < 0:
-        raise ValueError(f'{field_name} cannot be negative')
+def _require_non_negative(value: object, *, field_name: str) -> Decimal:
+    amount = validate_price(value, field_name=field_name, allow_zero=True)
+    assert amount is not None
     return amount
 
 
-def _require_positive_selling_price(value: Decimal | float | int) -> Decimal:
-    amount = Decimal(str(value))
-    if amount <= 0:
-        raise ValueError('Selling price must be greater than 0')
+def _require_positive_selling_price(value: object) -> Decimal:
+    amount = validate_price(
+        value,
+        field_name='Selling price',
+        allow_zero=False,
+    )
+    assert amount is not None
     return amount
 
 
@@ -61,10 +60,7 @@ class ProductCategoryCreate(BaseModel):
     @field_validator('name', mode='before')
     @classmethod
     def require_name(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Category name is required')
-        return stripped
+        return validate_required_text(value, field_name='Category name', max_length=120)
 
 
 class ProductCategoryUpdate(BaseModel):
@@ -77,10 +73,7 @@ class ProductCategoryUpdate(BaseModel):
     def strip_name(cls, value: object) -> str | None:
         if value is None:
             return None
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Category name cannot be empty')
-        return stripped
+        return validate_required_text(value, field_name='Category name', max_length=120)
 
 
 class ProductCategoryListResponse(BaseModel):
@@ -133,10 +126,7 @@ class ProductCreate(BaseModel):
     @field_validator('name', mode='before')
     @classmethod
     def require_name(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Product name is required')
-        return stripped
+        return validate_required_text(value, field_name='Product name', max_length=200)
 
     @field_validator('description', 'sku', mode='before')
     @classmethod
@@ -181,10 +171,7 @@ class ProductUpdate(BaseModel):
     def strip_name(cls, value: object) -> str | None:
         if value is None:
             return None
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Product name cannot be empty')
-        return stripped
+        return validate_required_text(value, field_name='Product name', max_length=200)
 
     @field_validator('description', 'sku', mode='before')
     @classmethod

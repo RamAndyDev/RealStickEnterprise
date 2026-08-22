@@ -179,6 +179,46 @@ class ProductRepository:
             raise RuntimeError('Product update returned no data')
         return rows[0]
 
+    def delete_product(self, product_id: UUID) -> bool:
+        response = (
+            self._db.table('products')
+            .delete()
+            .eq('id', str(product_id))
+            .execute()
+        )
+        return bool(response.data)
+
+    def product_has_business_references(self, product_id: UUID) -> bool:
+        """True when any business/historical row still points at this product.
+
+        Direct FKs: franchise_product_prices, order_items, recipes.
+        recipe_items hang off recipes (no product_id column).
+        inventory_movements has no product_id FK; a movement tagged to this
+        product via reference_id is still treated as a historical reference.
+        """
+        pid = str(product_id)
+        if self._row_exists('franchise_product_prices', 'product_id', pid):
+            return True
+        if self._row_exists('order_items', 'product_id', pid):
+            return True
+        if self._row_exists('recipes', 'product_id', pid):
+            # recipes.product_id is the FK; recipe_items hang off recipes and
+            # have no product_id column, so a recipe is enough to block delete.
+            return True
+        if self._row_exists('inventory_movements', 'reference_id', pid):
+            return True
+        return False
+
+    def _row_exists(self, table: str, column: str, value: str) -> bool:
+        response = (
+            self._db.table(table)
+            .select('id')
+            .eq(column, value)
+            .limit(1)
+            .execute()
+        )
+        return bool(response.data)
+
     def get_products_by_ids(self, product_ids: list[str]) -> list[dict[str, Any]]:
         if not product_ids:
             return []
@@ -332,3 +372,11 @@ class ProductRepository:
             return code == '23505' or 'duplicate' in message.lower() or 'unique' in message.lower()
         message = str(exc).lower()
         return 'duplicate' in message or 'unique' in message
+
+    @staticmethod
+    def is_foreign_key_violation(exc: Exception) -> bool:
+        if isinstance(exc, APIError):
+            code = getattr(exc, 'code', None) or ''
+            message = str(exc).lower()
+            return code == '23503' or 'foreign key' in message
+        return 'foreign key' in str(exc).lower()

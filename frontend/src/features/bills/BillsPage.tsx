@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { Badge, Button, EmptyState, ErrorBanner, Field, LoadingBlock, SelectField } from '../../components/ui';
+import { ActionButton, ActionsTd, ActionsTh, Badge, Button, EmptyState, ErrorBanner, Field, LoadingBlock, SelectField } from '../../components/ui';
 import { useAuth } from '../auth/AuthProvider';
 import { listFranchises } from '../../lib/franchisesApi';
 import { fetchCompletedOrders } from '../../lib/ordersApi';
@@ -181,7 +181,7 @@ export function BillsPage() {
                   <th className="px-4 py-3 font-semibold">Cashier</th>
                   <th className="px-4 py-3 font-semibold">Payment</th>
                   <th className="px-4 py-3 font-semibold">Total</th>
-                  <th className="px-4 py-3 font-semibold">Action</th>
+                  <ActionsTh>Action</ActionsTh>
                 </tr>
               </thead>
               <tbody>
@@ -201,13 +201,11 @@ export function BillsPage() {
                         <Badge tone="navy">{paymentLabel(item.payment_method)}</Badge>
                       </td>
                       <td className="px-4 py-3 font-semibold">{formatINR(item.total_amount)}</td>
-                      <td className="px-4 py-3">
+                      <ActionsTd>
                         <Link to={`/bills/${item.id}`}>
-                          <Button size="sm" variant="outline">
-                            View
-                          </Button>
+                          <ActionButton variant="outline">View</ActionButton>
                         </Link>
-                      </td>
+                      </ActionsTd>
                     </tr>
                   );
                 })}

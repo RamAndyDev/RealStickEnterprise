@@ -119,6 +119,50 @@ class UsersRepository:
             raise RuntimeError('Profile update returned no data')
         return rows[0]
 
+    def delete_profile(self, profile_id: UUID) -> bool:
+        response = (
+            self._db.table('profiles')
+            .delete()
+            .eq('id', str(profile_id))
+            .execute()
+        )
+        return bool(response.data)
+
+    def profile_has_business_references(self, profile_id: UUID) -> bool:
+        """True when any historical/business row still points at this profile."""
+        pid = str(profile_id)
+        checks: tuple[tuple[str, str], ...] = (
+            ('orders', 'cashier_id'),
+            ('franchise_audits', 'auditor_id'),
+            ('quality_audits', 'auditor_id'),
+            ('gallery_items', 'uploaded_by'),
+            ('inventory_movements', 'created_by'),
+            ('franchise_applications', 'reviewed_by'),
+            ('launch_checklist_items', 'completed_by'),
+            ('promotions', 'created_by'),
+            ('discounts', 'created_by'),
+            ('employee_sessions', 'employee_id'),
+        )
+        return any(self._row_exists(table, column, pid) for table, column in checks)
+
+    def _row_exists(self, table: str, column: str, value: str) -> bool:
+        response = (
+            self._db.table(table)
+            .select('id')
+            .eq(column, value)
+            .limit(1)
+            .execute()
+        )
+        return bool(response.data)
+
+    @staticmethod
+    def is_foreign_key_violation(exc: Exception) -> bool:
+        if isinstance(exc, APIError):
+            code = getattr(exc, 'code', None) or ''
+            message = str(exc).lower()
+            return code == '23503' or 'foreign key' in message
+        return 'foreign key' in str(exc).lower()
+
     def count_active_employees(
         self,
         franchise_id: UUID,

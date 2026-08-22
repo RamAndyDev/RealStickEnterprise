@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends
 from app.core.roles import UserRole
 from app.core.security import CurrentProfile, require_role
 from app.modules.settings.schemas import (
+    FranchiseAuditSetting,
+    FranchiseAuditSettingUpdate,
     GstSettings,
     GstUpdate,
     Offer,
@@ -30,6 +32,23 @@ FranchiseOwner = Annotated[CurrentProfile, Depends(require_role(UserRole.FRANCHI
 
 def get_settings_service() -> SettingsService:
     return SettingsService()
+
+
+@router.get('/settings/franchise-audit', response_model=FranchiseAuditSetting)
+def get_franchise_audit_setting(
+    _: SystemAdmin,
+    service: SettingsService = Depends(get_settings_service),
+) -> FranchiseAuditSetting:
+    return service.get_franchise_audit_setting()
+
+
+@router.patch('/settings/franchise-audit', response_model=FranchiseAuditSetting)
+def update_franchise_audit_setting(
+    body: FranchiseAuditSettingUpdate,
+    _: SystemAdmin,
+    service: SettingsService = Depends(get_settings_service),
+) -> FranchiseAuditSetting:
+    return service.update_franchise_audit_setting(body)
 
 
 @router.get('/gst', response_model=GstSettings)

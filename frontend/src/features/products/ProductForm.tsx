@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 
 import { Button, Field, SelectField } from '../../components/ui';
+import { validatePrice, validateRequiredText } from '../../lib/validation';
 import type { Product, ProductCategory, ProductWritePayload } from '../../types/product';
 import { ProductImage } from './ProductImage';
 
@@ -72,11 +73,19 @@ export function ProductForm({
 }) {
   const [values, setValues] = useState<ProductFormValues>(initial);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProductFormValues, string>>>({});
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const update = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      setFieldErrors((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
   };
 
   const handleFile = (file: File | null) => {
@@ -105,26 +114,30 @@ export function ProductForm({
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!values.name.trim()) {
-      setError('Item name is required.');
-      return;
-    }
+    const nextErrors: Partial<Record<keyof ProductFormValues, string>> = {};
+    const nameError = validateRequiredText(values.name, 'Item name is required.');
+    if (nameError) nextErrors.name = nameError;
     if (!values.category_id) {
-      setError('Category is required.');
-      return;
+      nextErrors.category_id = 'Category is required.';
     }
     const selected = categories.find((c) => c.id === values.category_id);
-    if (!selected) {
-      setError('Category is required.');
-      return;
+    if (!selected && values.category_id) {
+      nextErrors.category_id = 'Category is required.';
     }
-    if (!selected.is_active && selected.id !== initial.category_id) {
-      setError('Select an active category.');
-      return;
+    if (selected && !selected.is_active && selected.id !== initial.category_id) {
+      nextErrors.category_id = 'Select an active category.';
     }
-    const price = Number(values.price);
-    if (Number.isNaN(price) || price < 0) {
-      setError('Enter a valid master price (₹), zero or greater.');
+    const priceError = validatePrice(values.price, {
+      requiredMessage: 'Master price is required.',
+      invalidMessage: 'Enter a valid price with up to 2 decimal places.',
+      minMessage: 'Enter a valid master price (₹), zero or greater.',
+      allowZero: true,
+      requirePositive: false,
+    });
+    if (priceError) nextErrors.price = priceError;
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      setError(null);
       return;
     }
     setError(null);
@@ -139,6 +152,7 @@ export function ProductForm({
         label="Item Name"
         value={values.name}
         onChange={(e) => update('name', e.target.value)}
+        error={fieldErrors.name}
         required
       />
       <Field
@@ -153,6 +167,7 @@ export function ProductForm({
         step="0.01"
         value={values.price}
         onChange={(e) => update('price', e.target.value)}
+        error={fieldErrors.price}
         required
       />
       <p className="mb-3 -mt-2 text-[11px] text-[#8A8A84]">
@@ -163,6 +178,7 @@ export function ProductForm({
         label="Category"
         value={values.category_id}
         onChange={(e) => update('category_id', e.target.value)}
+        error={fieldErrors.category_id}
         required
         disabled={!assignableCategories.length}
       >

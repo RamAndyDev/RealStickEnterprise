@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.validation import strip_text, validate_phone, validate_quantity
+
 
 class PosPaymentMethod(StrEnum):
     CASH = 'CASH'
@@ -14,12 +16,7 @@ class PosPaymentMethod(StrEnum):
 
 
 def _strip_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('value must be a string')
-    stripped = value.strip()
-    return stripped or None
+    return strip_text(value)
 
 
 class PosMenuCategory(BaseModel):
@@ -68,6 +65,11 @@ class PosOrderItemIn(BaseModel):
     product_id: UUID
     quantity: int = Field(ge=1, le=999)
 
+    @field_validator('quantity', mode='before')
+    @classmethod
+    def require_quantity(cls, value: object) -> int:
+        return validate_quantity(value, field_name='Quantity', minimum=1, maximum=999)
+
 
 class PosOrderCreate(BaseModel):
     model_config = ConfigDict(extra='ignore')
@@ -80,7 +82,7 @@ class PosOrderCreate(BaseModel):
     @field_validator('customer_phone', mode='before')
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
-        return _strip_text(value)
+        return validate_phone(value, required=False)
 
 
 class PosOrderItem(BaseModel):

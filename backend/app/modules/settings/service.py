@@ -8,6 +8,8 @@ from app.core.gst import split_gst_rate
 from app.core.security import CurrentProfile
 from app.modules.settings.repository import SettingsRepository
 from app.modules.settings.schemas import (
+    FranchiseAuditSetting,
+    FranchiseAuditSettingUpdate,
     GstSettings,
     GstUpdate,
     Offer,
@@ -20,6 +22,24 @@ from app.modules.settings.schemas import (
     PromotionUpdate,
     offer_from_row,
 )
+
+FRANCHISE_OWNER_AUDIT_SETTING_KEY = 'franchise_owner_audit_enabled'
+DEFAULT_FRANCHISE_OWNER_AUDIT_ENABLED = False
+
+
+def parse_bool_setting(value: object, default: bool = DEFAULT_FRANCHISE_OWNER_AUDIT_ENABLED) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {'true', '1', 'yes', 'on'}:
+            return True
+        if lowered in {'false', '0', 'no', 'off'}:
+            return False
+        return default
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    return default
 
 
 def _gst_from_row(row: dict) -> GstSettings:
@@ -39,6 +59,35 @@ def _gst_from_row(row: dict) -> GstSettings:
 class SettingsService:
     def __init__(self, repo: SettingsRepository | None = None) -> None:
         self.repo = repo or SettingsRepository()
+
+    def is_franchise_owner_audit_enabled(self) -> bool:
+        try:
+            row = self.repo.get_system_setting(FRANCHISE_OWNER_AUDIT_SETTING_KEY)
+        except Exception:
+            return DEFAULT_FRANCHISE_OWNER_AUDIT_ENABLED
+        if not row:
+            return DEFAULT_FRANCHISE_OWNER_AUDIT_ENABLED
+        return parse_bool_setting(row.get('value'))
+
+    def get_franchise_audit_setting(self) -> FranchiseAuditSetting:
+        return FranchiseAuditSetting(
+            franchise_owner_audit_enabled=self.is_franchise_owner_audit_enabled(),
+        )
+
+    def update_franchise_audit_setting(self, body: FranchiseAuditSettingUpdate) -> FranchiseAuditSetting:
+        try:
+            self.repo.upsert_system_setting(
+                FRANCHISE_OWNER_AUDIT_SETTING_KEY,
+                bool(body.franchise_owner_audit_enabled),
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to update Franchise Audit access',
+            ) from exc
+        return FranchiseAuditSetting(
+            franchise_owner_audit_enabled=bool(body.franchise_owner_audit_enabled),
+        )
 
     def get_gst(self) -> GstSettings:
         row = self.repo.get_active_gst()

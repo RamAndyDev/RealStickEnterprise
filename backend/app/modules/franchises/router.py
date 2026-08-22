@@ -18,6 +18,7 @@ from app.modules.franchises.schemas import (
     FranchiseOwnerCreateResponse,
     FranchiseStatus,
     FranchiseStatusUpdate,
+    FranchiseOfflinePaymentCreate,
     FranchiseUpdate,
     LaunchChecklistItem,
     LaunchChecklistItemUpdate,
@@ -60,10 +61,10 @@ def get_franchise(
 @router.post('/franchises', response_model=FranchiseDetail, status_code=201)
 def create_franchise(
     body: FranchiseCreate,
-    _: SystemAdmin,
+    profile: SystemAdmin,
     service: FranchiseService = Depends(get_franchise_service),
 ) -> FranchiseDetail:
-    return service.create_franchise(body)
+    return service.create_franchise(body, actor=profile)
 
 
 @router.patch('/franchises/{franchise_id}', response_model=FranchiseDetail)
@@ -84,6 +85,15 @@ def update_franchise_status(
     service: FranchiseService = Depends(get_franchise_service),
 ) -> FranchiseDetail:
     return service.update_status(franchise_id, body)
+
+
+@router.delete('/franchises/{franchise_id}', status_code=204)
+def delete_franchise(
+    franchise_id: UUID,
+    _: SystemAdmin,
+    service: FranchiseService = Depends(get_franchise_service),
+) -> None:
+    service.delete_franchise(franchise_id)
 
 
 @router.patch('/franchises/{franchise_id}/owner', response_model=FranchiseDetail)
@@ -108,6 +118,20 @@ def create_franchise_owner(
     service: FranchiseService = Depends(get_franchise_service),
 ) -> FranchiseOwnerCreateResponse:
     return service.create_owner(franchise_id, body, profile)
+
+
+@router.post(
+    '/franchises/{franchise_id}/payments',
+    response_model=FranchiseDetail,
+    status_code=201,
+)
+def record_offline_franchise_payment(
+    franchise_id: UUID,
+    body: FranchiseOfflinePaymentCreate,
+    _: SystemAdmin,
+    service: FranchiseService = Depends(get_franchise_service),
+) -> FranchiseDetail:
+    return service.record_offline_payment(franchise_id, body)
 
 
 @router.get('/franchises/{franchise_id}/launch-checklist', response_model=list[LaunchChecklistItem])

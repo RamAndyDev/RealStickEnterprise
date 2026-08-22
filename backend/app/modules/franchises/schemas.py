@@ -1,35 +1,34 @@
 from __future__ import annotations
 
-import re
 from datetime import date, datetime
+from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+from app.core.validation import (
+    strip_text,
+    validate_amount,
+    validate_email,
+    validate_optional_text,
+    validate_phone,
+    validate_required_text,
+)
+
+OWNER_EMAIL_EXISTS_DETAIL = 'Email already exists. Please use a different email address.'
+FRANCHISE_DELETE_BLOCKED_DETAIL = (
+    'This franchise cannot be deleted because it is already used in existing business records. '
+    'Deactivate it instead.'
+)
 
 
 def _normalize_email(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('email must be a string')
-    stripped = value.strip().lower()
-    if not stripped:
-        return None
-    if not _EMAIL_RE.match(stripped):
-        raise ValueError('Invalid email format')
-    return stripped
+    return validate_email(value, required=False)
 
 
 def _strip_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('value must be a string')
-    stripped = value.strip()
-    return stripped or None
+    return strip_text(value)
 
 
 class FranchiseStatus(StrEnum):
@@ -42,6 +41,28 @@ class FranchiseStatus(StrEnum):
 
 
 FRANCHISE_TIERS = frozenset({'Founder', 'Growth', 'Scale', 'Elite'})
+
+# Stored as franchise_payments.payment_method (text). Distinct from POS CASH/UPI/CARD.
+class FranchisePaymentMethod(StrEnum):
+    CASH = 'CASH'
+    BANK_TRANSFER = 'BANK_TRANSFER'
+    UPI = 'UPI'
+    CHEQUE = 'CHEQUE'
+    OTHER = 'OTHER'
+
+
+# Existing franchise_payments.status check constraint values.
+class FranchisePaymentStatus(StrEnum):
+    PENDING = 'PENDING'
+    COMPLETED = 'COMPLETED'
+    FAILED = 'FAILED'
+    REFUNDED = 'REFUNDED'
+
+
+def _require_positive_paid_amount(value: object) -> Decimal:
+    amount = validate_amount(value, field_name='Paid amount')
+    assert amount is not None
+    return amount
 
 
 class FranchiseOwnerSummary(BaseModel):
@@ -137,6 +158,8 @@ class FranchiseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     code: str | None = Field(default=None, max_length=50)
     owner_email: str | None = None
+    owner_full_name: str | None = Field(default=None, max_length=200)
+    owner_phone: str | None = Field(default=None, max_length=40)
     address: str | None = Field(default=None, max_length=500)
     city: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, max_length=120)
@@ -150,15 +173,22 @@ class FranchiseCreate(BaseModel):
     @field_validator('name', mode='before')
     @classmethod
     def require_name(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Outlet name is required')
-        return stripped
+        return validate_required_text(value, field_name='Outlet name', max_length=200)
 
     @field_validator('code', 'address', 'city', 'state', 'postal_code', mode='before')
     @classmethod
     def strip_optional(cls, value: object) -> str | None:
         return _strip_text(value)
+
+    @field_validator('owner_full_name', mode='before')
+    @classmethod
+    def strip_owner_name(cls, value: object) -> str | None:
+        return validate_optional_text(value, field_name='Owner name', max_length=200)
+
+    @field_validator('owner_phone', mode='before')
+    @classmethod
+    def validate_owner_phone(cls, value: object) -> str | None:
+        return validate_phone(value, required=False)
 
     @field_validator('owner_email', mode='before')
     @classmethod
@@ -171,6 +201,21 @@ class FranchiseCreate(BaseModel):
         if value not in FRANCHISE_TIERS:
             raise ValueError(f'tier must be one of: {", ".join(sorted(FRANCHISE_TIERS))}')
         return value
+
+    @model_validator(mode='after')
+    def require_owner_email_when_creating_owner(self) -> FranchiseCreate:
+        if self.owner_full_name and not self.owner_email:
+            raise ValueError('Owner email is required')
+        return self
+
+    def owner_create_payload(self) -> FranchiseOwnerCreate | None:
+        if not self.owner_full_name:
+            return None
+        return FranchiseOwnerCreate(
+            full_name=self.owner_full_name,
+            email=self.owner_email or '',
+            phone=self.owner_phone,
+        )
 
 
 class FranchiseUpdate(BaseModel):
@@ -191,10 +236,7 @@ class FranchiseUpdate(BaseModel):
     def strip_name(cls, value: object) -> str | None:
         if value is None:
             return None
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Outlet name cannot be empty')
-        return stripped
+        return validate_required_text(value, field_name='Outlet name', max_length=200)
 
     @field_validator('code', 'address', 'city', 'state', 'postal_code', mode='before')
     @classmethod
@@ -248,15 +290,12 @@ class FranchiseOwnerCreate(BaseModel):
     @field_validator('full_name', mode='before')
     @classmethod
     def require_name(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Owner name is required')
-        return stripped
+        return validate_required_text(value, field_name='Owner name', max_length=200)
 
     @field_validator('email', mode='before')
     @classmethod
     def require_email(cls, value: object) -> str:
-        normalized = _normalize_email(value)
+        normalized = validate_email(value, required=True)
         if not normalized:
             raise ValueError('Owner email is required')
         return normalized
@@ -264,7 +303,7 @@ class FranchiseOwnerCreate(BaseModel):
     @field_validator('phone', mode='before')
     @classmethod
     def strip_phone(cls, value: object) -> str | None:
-        return _strip_text(value)
+        return validate_phone(value, required=False)
 
 
 class FranchiseOwnerCreateResponse(BaseModel):
@@ -276,6 +315,24 @@ class FranchiseOwnerCreateResponse(BaseModel):
 
 class LaunchChecklistItemUpdate(BaseModel):
     is_completed: bool
+
+
+class FranchiseOfflinePaymentCreate(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    paid_at: date
+    payment_method: FranchisePaymentMethod
+    reference_number: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator('amount', mode='before')
+    @classmethod
+    def validate_amount(cls, value: object) -> Decimal:
+        return _require_positive_paid_amount(value)
+
+    @field_validator('reference_number', 'notes', mode='before')
+    @classmethod
+    def strip_optional(cls, value: object) -> str | None:
+        return _strip_text(value)
 
 
 class FranchiseListResponse(BaseModel):

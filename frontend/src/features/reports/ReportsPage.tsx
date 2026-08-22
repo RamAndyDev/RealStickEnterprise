@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { EmptyState, ErrorBanner, LoadingBlock, StatCard } from '../../components/ui';
+import { Button, EmptyState, ErrorBanner, Field, LoadingBlock, StatCard, SuccessBanner } from '../../components/ui';
 import {
+  exportSalesReport,
   fetchDailyRevenue,
   fetchPaymentTotals,
   fetchProductSales,
@@ -13,35 +14,75 @@ import { formatINR } from '../../types/pos';
 import { formatBillDateTime, paymentLabel } from '../../types/orders';
 import type { ReportPeriod } from '../../types/reports';
 import { apiErrorMessage } from '../franchises/status';
+import {
+  customRangeValidationError,
+  shouldFetchReports,
+} from './reportDateRange';
+import {
+  REPORT_EXPORT_SUCCESS,
+  toReportExportError,
+} from './reportExport';
 import { DailyRevenueChart } from './DailyRevenueChart';
 
 export function ReportsPage() {
   const [period, setPeriod] = useState<ReportPeriod>('7d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
 
+  const rangeError = customRangeValidationError(period, customFrom, customTo);
+  const canFetch = shouldFetchReports(period, customFrom, customTo);
+  const canGenerate = canFetch;
+
+  const rangeKey = period === 'custom' ? [customFrom, customTo] : [];
   const summaryQuery = useQuery({
-    queryKey: ['reports-summary', period],
-    queryFn: () => fetchReportSummary(period),
+    queryKey: ['reports-summary', period, ...rangeKey],
+    queryFn: () => fetchReportSummary(period, customFrom, customTo),
+    enabled: canFetch,
   });
   const dailyQuery = useQuery({
-    queryKey: ['reports-daily', period],
-    queryFn: () => fetchDailyRevenue(period),
+    queryKey: ['reports-daily', period, ...rangeKey],
+    queryFn: () => fetchDailyRevenue(period, customFrom, customTo),
+    enabled: canFetch,
   });
   const productsQuery = useQuery({
-    queryKey: ['reports-products', period],
-    queryFn: () => fetchProductSales(period),
+    queryKey: ['reports-products', period, ...rangeKey],
+    queryFn: () => fetchProductSales(period, customFrom, customTo),
+    enabled: canFetch,
   });
   const paymentsQuery = useQuery({
-    queryKey: ['reports-payments', period],
-    queryFn: () => fetchPaymentTotals(period),
+    queryKey: ['reports-payments', period, ...rangeKey],
+    queryFn: () => fetchPaymentTotals(period, customFrom, customTo),
+    enabled: canFetch,
   });
 
   const loading =
-    summaryQuery.isLoading || dailyQuery.isLoading || productsQuery.isLoading || paymentsQuery.isLoading;
-  const error = summaryQuery.error || dailyQuery.error || productsQuery.error || paymentsQuery.error;
-  const summary = summaryQuery.data;
+    canFetch &&
+    (summaryQuery.isLoading || dailyQuery.isLoading || productsQuery.isLoading || paymentsQuery.isLoading);
+  const error = canFetch
+    ? summaryQuery.error || dailyQuery.error || productsQuery.error || paymentsQuery.error
+    : null;
+  const summary = canFetch ? summaryQuery.data : undefined;
   const products = productsQuery.data?.items ?? [];
   const payments = paymentsQuery.data?.items ?? [];
   const recentBills = summary?.recent_bills ?? [];
+
+  async function handleGenerate() {
+    if (!canGenerate || generating) return;
+    setGenerating(true);
+    setExportError(null);
+    setExportSuccess(null);
+    try {
+      await exportSalesReport(period, customFrom, customTo);
+      setExportSuccess(REPORT_EXPORT_SUCCESS);
+    } catch (err) {
+      setExportError(await toReportExportError(err));
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-[860px]">
@@ -50,17 +91,61 @@ export function ReportsPage() {
           <h1 className="font-serif text-xl font-bold text-[#1A1A18]">Sales Reports</h1>
           <p className="text-xs text-[#8A8A84]">Performance overview</p>
         </div>
-        <select
-          aria-label="Report period"
-          value={period}
-          onChange={(event) => setPeriod(event.target.value as ReportPeriod)}
-          className="rounded-[7px] border border-[#E0DDD5] bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[#1A7A4A]"
-        >
-          <option value="today">Today</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Report period"
+            value={period}
+            onChange={(event) => setPeriod(event.target.value as ReportPeriod)}
+            className="rounded-[7px] border border-[#E0DDD5] bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[#1A7A4A]"
+          >
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="custom">Custom Date Range</option>
+          </select>
+          <Button size="sm" onClick={() => void handleGenerate()} disabled={!canGenerate || generating}>
+            {generating ? 'Generating...' : 'Generate Report'}
+          </Button>
+        </div>
       </div>
+
+      {period === 'custom' ? (
+        <div className="mb-3.5 grid gap-3 sm:grid-cols-2">
+          <Field
+            id="report-start-date"
+            label="From"
+            type="date"
+            value={customFrom}
+            onChange={(event) => setCustomFrom(event.target.value)}
+            aria-label="Start date"
+          />
+          <Field
+            id="report-end-date"
+            label="To"
+            type="date"
+            value={customTo}
+            onChange={(event) => setCustomTo(event.target.value)}
+            aria-label="End date"
+          />
+        </div>
+      ) : null}
+
+      {rangeError ? (
+        <p className="mb-3.5 text-xs text-red-600" role="alert">
+          {rangeError}
+        </p>
+      ) : null}
+
+      {exportSuccess ? (
+        <div className="mb-3.5">
+          <SuccessBanner message={exportSuccess} />
+        </div>
+      ) : null}
+      {exportError ? (
+        <div className="mb-3.5">
+          <ErrorBanner message={exportError} />
+        </div>
+      ) : null}
 
       {loading ? <LoadingBlock label="Loading reports…" /> : null}
       {error ? <ErrorBanner message={apiErrorMessage(error, 'Unable to load reports.')} /> : null}
@@ -146,7 +231,7 @@ export function ReportsPage() {
         </>
       ) : null}
 
-      {!loading && !error && !summary ? <EmptyState title="No report data" /> : null}
+      {!loading && !error && !summary && !rangeError ? <EmptyState title="No report data" /> : null}
     </div>
   );
 }

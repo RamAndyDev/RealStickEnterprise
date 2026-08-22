@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import {
+  ActionButton,
   Badge,
   Button,
   EmptyState,
@@ -94,7 +95,7 @@ export function OwnerMenuPage() {
   }, [filtered]);
 
   const availableCount = items.filter((item) => item.available_for_pos).length;
-  const editPriceError = sellingPriceError(editPrice, editRow?.master_price);
+  const editPriceError = sellingPriceError(editPrice);
 
   if (menuQuery.isLoading) {
     return <LoadingBlock label="Loading franchise menu…" />;
@@ -212,7 +213,10 @@ export function OwnerMenuPage() {
                       {item.category_name ?? 'Uncategorized'}
                     </div>
                     <div className="mt-1.5 text-[11px] text-[#8A8A84]">
-                      Master {formatINR(item.master_price)}
+                      Master {formatINR(item.master_price)} · Reference only
+                    </div>
+                    <div className="mt-1 text-[10px] uppercase tracking-[.05em] text-[#8A8A84]">
+                      Your Selling Price
                     </div>
                     <div className="mt-0.5 font-serif text-xl font-bold text-[#1A7A4A]">
                       {formatINR(item.selling_price)}
@@ -226,9 +230,9 @@ export function OwnerMenuPage() {
                         <Badge tone="muted">Inactive</Badge>
                       )}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
+                    <div className="mt-3">
+                      <ActionButton
+                        fit="lg"
                         variant="outline"
                         disabled={!canEditPrice}
                         onClick={() => {
@@ -239,7 +243,7 @@ export function OwnerMenuPage() {
                         }}
                       >
                         Edit Price
-                      </Button>
+                      </ActionButton>
                     </div>
                   </div>
                 </article>
@@ -260,11 +264,11 @@ export function OwnerMenuPage() {
               {formatINR(editRow.master_price)}
             </div>
             <p className="mt-1 text-[11px] text-[#8A8A84]">
-              Selling price must be greater than 0 and strictly less than the master price.
+              Master Price is for reference only.
             </p>
           </div>
           <Field
-            label="New Franchise Price (₹)"
+            label="Your Selling Price (₹)"
             type="number"
             min={0.01}
             step="0.01"
@@ -275,6 +279,9 @@ export function OwnerMenuPage() {
               setPriceTouched(true);
             }}
           />
+          <p className="mb-3 text-[11px] text-[#8A8A84]">
+            Set the selling price for this franchise.
+          </p>
           <div className="flex justify-end gap-2">
             <Button variant="muted" onClick={() => setEditRow(null)}>
               Cancel

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  ActionButton,
+  ActionGroup,
   Badge,
   Button,
   EmptyState,
@@ -196,37 +198,37 @@ export function AdminGalleryPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
+              <ActionGroup>
+                <ActionButton variant="outline" onClick={() => openEdit(item)}>
                   Edit
-                </Button>
-                <Button
-                  size="sm"
+                </ActionButton>
+                <ActionButton
+                  fit="status"
                   variant="muted"
                   onClick={() =>
                     statusMutation.mutate({ id: item.id, payload: { is_approved: !item.is_approved } })
                   }
                 >
                   {item.is_approved ? 'Unapprove' : 'Approve'}
-                </Button>
+                </ActionButton>
                 {!item.is_archived ? (
-                  <Button
-                    size="sm"
+                  <ActionButton
+                    fit="md"
                     variant="danger"
                     onClick={() => statusMutation.mutate({ id: item.id, payload: { is_archived: true } })}
                   >
                     Archive
-                  </Button>
+                  </ActionButton>
                 ) : (
-                  <Button
-                    size="sm"
+                  <ActionButton
+                    fit="md"
                     variant="outline"
                     onClick={() => statusMutation.mutate({ id: item.id, payload: { is_archived: false } })}
                   >
                     Restore
-                  </Button>
+                  </ActionButton>
                 )}
-              </div>
+              </ActionGroup>
             </div>
           </article>
         ))}

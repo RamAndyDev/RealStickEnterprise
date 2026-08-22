@@ -9,15 +9,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.gst import GST_MAX_RATE, split_gst_rate
+from app.core.validation import strip_text, validate_percentage, validate_required_text
 
 
 def _strip_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError('value must be a string')
-    stripped = value.strip()
-    return stripped or None
+    return strip_text(value)
 
 
 class GstSettings(BaseModel):
@@ -30,10 +26,33 @@ class GstSettings(BaseModel):
     updated_at: datetime | None = None
 
 
+class FranchiseAuditSetting(BaseModel):
+    franchise_owner_audit_enabled: bool
+
+
+class FranchiseAuditSettingUpdate(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+    franchise_owner_audit_enabled: bool
+
+
 class GstUpdate(BaseModel):
     model_config = ConfigDict(extra='ignore')
 
     rate: Decimal = Field(..., ge=0, le=GST_MAX_RATE, max_digits=5, decimal_places=2)
+
+    @field_validator('rate', mode='before')
+    @classmethod
+    def validate_rate(cls, value: object) -> Decimal:
+        amount = validate_percentage(
+            value,
+            field_name='GST rate',
+            allow_zero=True,
+            min_value=Decimal('0'),
+            max_value=GST_MAX_RATE,
+        )
+        assert amount is not None
+        return amount
 
     @model_validator(mode='after')
     def require_even_split(self) -> 'GstUpdate':
@@ -83,10 +102,20 @@ class OfferCreate(BaseModel):
     @field_validator('name', mode='before')
     @classmethod
     def require_name(cls, value: object) -> str:
-        stripped = _strip_text(value)
-        if not stripped:
-            raise ValueError('Offer name is required')
-        return stripped
+        return validate_required_text(value, field_name='Offer name', max_length=120)
+
+    @field_validator('discount_value', mode='before')
+    @classmethod
+    def validate_discount(cls, value: object) -> Decimal:
+        amount = validate_percentage(
+            value,
+            field_name='Discount',
+            allow_zero=False,
+            min_value=Decimal('0.01'),
+            max_value=Decimal('100'),
+        )
+        assert amount is not None
+        return amount
 
     @field_validator('description', mode='before')
     @classmethod

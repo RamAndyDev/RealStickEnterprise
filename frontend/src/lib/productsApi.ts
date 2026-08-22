@@ -72,6 +72,10 @@ export async function updateProduct(
   return data;
 }
 
+export async function deleteProduct(id: string): Promise<void> {
+  await api.delete(`/admin/products/${id}`);
+}
+
 export async function uploadProductImage(id: string, file: File): Promise<Product> {
   const form = new FormData();
   form.append('file', file);

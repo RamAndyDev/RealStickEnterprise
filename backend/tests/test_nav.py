@@ -6,16 +6,35 @@ NAV_TS = ROOT / 'frontend' / 'src' / 'features' / 'auth' / 'nav.ts'
 APP_TSX = ROOT / 'frontend' / 'src' / 'app' / 'App.tsx'
 
 
+def _parse_role_list(raw: str) -> list[str]:
+    return [part.strip().strip("'\"") for part in raw.split(',') if part.strip()]
+
+
+def _role_constants(source: str) -> dict[str, list[str]]:
+    return {
+        name: _parse_role_list(raw)
+        for name, raw in re.findall(
+            r'export const ([A-Z0-9_]+): UserRole\[\] = \[([^\]]+)\]',
+            source,
+        )
+    }
+
+
 def _nav_items() -> list[tuple[str, str, list[str]]]:
     source = NAV_TS.read_text(encoding='utf-8')
+    constants = _role_constants(source)
     matches = re.findall(
-        r"label:\s*'([^']+)',\s*path:\s*'([^']+)',\s*roles:\s*\[([^\]]+)\]",
+        r"label:\s*'([^']+)',\s*path:\s*'([^']+)',\s*roles:\s*(\[[^\]]+\]|[A-Z0-9_]+)",
         source,
         flags=re.S,
     )
     items = []
     for label, path, roles_raw in matches:
-        roles = [part.strip().strip("'\"") for part in roles_raw.split(',') if part.strip()]
+        roles_raw = roles_raw.strip()
+        if roles_raw.startswith('['):
+            roles = _parse_role_list(roles_raw.strip('[]'))
+        else:
+            roles = constants[roles_raw]
         items.append((label, path, roles))
     return items
 
@@ -343,6 +362,36 @@ def test_admin_and_owner_see_audit_employee_does_not():
         r"ProtectedRoute roles=\{\['EMPLOYEE'\]\} />\}>\s*<Route path=\"audit\"",
         source,
     )
+    nav = NAV_TS.read_text(encoding='utf-8')
+    assert "export const AUDIT_ACCESS_ROLES: UserRole[] = ['SYSTEM_ADMIN', 'FRANCHISE_OWNER']" in nav
+    assert 'canAccessAudit' in nav
+    assert 'franchiseOwnerAuditEnabled' in nav
+    assert 'AuditProtectedRoute' in source
+    audit_item = next(item for item in _nav_items() if item[1] == '/audit')
+    assert audit_item[2] == ['SYSTEM_ADMIN', 'FRANCHISE_OWNER']
+
+
+def test_audit_option_is_nav_not_franchise_management_action():
+    franchises = (ROOT / 'frontend' / 'src' / 'features' / 'franchises' / 'FranchisesPage.tsx').read_text(
+        encoding='utf-8'
+    )
+    detail = (ROOT / 'frontend' / 'src' / 'features' / 'franchises' / 'FranchiseDetailPage.tsx').read_text(
+        encoding='utf-8'
+    )
+    settings_copy = (
+        ROOT / 'frontend' / 'src' / 'features' / 'franchises' / 'franchiseAuditSetting.ts'
+    ).read_text(encoding='utf-8')
+    settings_ui = (
+        ROOT / 'frontend' / 'src' / 'features' / 'franchises' / 'FranchiseAuditSettings.tsx'
+    ).read_text(encoding='utf-8')
+    assert 'FranchiseAuditSettings' in franchises
+    assert "to={`/audit" not in franchises
+    assert 'path="/audit"' not in franchises
+    assert 'Audit' not in detail
+    assert 'Allow Franchise Owners to access Audit' in settings_copy
+    assert 'FRANCHISE_AUDIT_SETTING_COPY.label' in settings_ui
+    audit_item = next(item for item in _nav_items() if item[0] == 'Audit')
+    assert audit_item[1] == '/audit'
 
 
 def test_receipt_route_remains_outside_appshell():
@@ -368,11 +417,21 @@ def test_public_home_uses_official_brand_image():
     home = (ROOT / 'frontend' / 'src' / 'features' / 'public' / 'HomePage.tsx').read_text(
         encoding='utf-8'
     )
-    brand = ROOT / 'frontend' / 'public' / 'brand' / 'realstick-brand.svg'
-    assert '/brand/realstick-brand.svg' in hero
+    layout = (ROOT / 'frontend' / 'src' / 'components' / 'layout' / 'PublicLayout.tsx').read_text(
+        encoding='utf-8'
+    )
+    brand_ts = (ROOT / 'frontend' / 'src' / 'components' / 'branding' / 'brand.ts').read_text(
+        encoding='utf-8'
+    )
+    logo = ROOT / 'frontend' / 'public' / 'realstick-logo.jpeg'
+    assert "from '../../components/branding/RealStickLogo'" in hero
+    assert '<RealStickLogo' in hero
     assert 'BrandHero' in home
-    assert brand.exists()
-    assert 'RealStick' in brand.read_text(encoding='utf-8')
+    assert '<RealStickLogo' in layout
+    assert "REALSTICK_LOGO_SRC = '/realstick-logo.jpeg'" in brand_ts
+    assert logo.exists()
+    assert logo.stat().st_size > 0
+    assert logo.read_bytes()[:3] == b'\xff\xd8\xff'
 
 
 def test_view_gallery_button_has_readable_contrast():

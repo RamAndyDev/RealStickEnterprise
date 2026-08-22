@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from app.core.roles import UserRole
 from app.core.security import CurrentProfile
 from app.modules.audits.repository import AuditsRepository
+from app.modules.settings.service import SettingsService
 from app.modules.audits.schemas import (
     AuditCreate,
     AuditDetail,
@@ -79,8 +80,13 @@ def calculate_overall_status(statuses: list[FranchiseAuditStatus]) -> FranchiseA
 
 
 class AuditsService:
-    def __init__(self, repo: AuditsRepository | None = None) -> None:
+    def __init__(
+        self,
+        repo: AuditsRepository | None = None,
+        settings_service: SettingsService | None = None,
+    ) -> None:
         self.repo = repo or AuditsRepository()
+        self.settings_service = settings_service or SettingsService()
 
     def list_audits(
         self,
@@ -93,6 +99,7 @@ class AuditsService:
         page: int,
         page_size: int,
     ) -> AuditListResponse:
+        self._assert_can_use_audit(profile)
         scoped = self._list_franchise_scope(profile, franchise_id)
         if from_date is not None and to_date is not None and from_date > to_date:
             raise HTTPException(
@@ -112,6 +119,7 @@ class AuditsService:
         return AuditListResponse(items=items, page=page, page_size=page_size, total=total)
 
     def get_audit(self, profile: CurrentProfile, audit_id: UUID) -> AuditDetail:
+        self._assert_can_use_audit(profile)
         row = self.repo.get_audit(audit_id)
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Audit not found')
@@ -120,6 +128,7 @@ class AuditsService:
         return self._to_detail(row, items)
 
     def create_audit(self, profile: CurrentProfile, body: AuditCreate) -> AuditDetail:
+        self._assert_can_use_audit(profile)
         franchise_id = self._create_franchise_id(profile, body.franchise_id)
         audit_date = self._validated_audit_date(body.audit_date)
         self._validate_checklist(body.items)
@@ -153,6 +162,20 @@ class AuditsService:
 
         created, items = self.repo.create_audit_with_items(audit_payload, item_payloads)
         return self._to_detail(created, items)
+
+    def _assert_can_use_audit(self, profile: CurrentProfile) -> None:
+        if profile.role == UserRole.SYSTEM_ADMIN:
+            return
+        if profile.role != UserRole.FRANCHISE_OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Insufficient permissions for this resource',
+            )
+        if not self.settings_service.is_franchise_owner_audit_enabled():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Insufficient permissions for this resource',
+            )
 
     def _create_franchise_id(
         self,

@@ -12,6 +12,12 @@ import type { Session } from '@supabase/supabase-js';
 import { api, fetchCurrentProfile } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import type { AuthProfile, UserRole } from '../../types/auth';
+import {
+  clearEmployeeSessionId,
+  readEmployeeSessionId,
+  storeEmployeeSessionId,
+} from './employeeSession';
+import { toLoginErrorMessage } from './loginError';
 
 type AuthContextValue = {
   session: Session | null;
@@ -43,7 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadProfile = useCallback(async (activeSession: Session | null) => {
+  const loadProfile = useCallback(async (
+    activeSession: Session | null,
+    options?: { rethrow?: boolean },
+  ) => {
     if (!activeSession?.access_token) {
       setProfile(null);
       return;
@@ -54,10 +63,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
     } catch (err) {
       setProfile(null);
-      setError(toErrorMessage(err, 'Unable to load profile'));
+      setError(
+        options?.rethrow ? toLoginErrorMessage(err) : toErrorMessage(err, 'Unable to load profile'),
+      );
       // Invalid/inactive application access: clear Supabase session.
       await supabase.auth.signOut();
       setSession(null);
+      if (options?.rethrow) throw err;
     }
   }, []);
 
@@ -100,31 +112,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await api.post<{
         access_token: string;
         refresh_token: string;
+        employee_session_id?: string | null;
       }>('/auth/login', { identifier, password });
       const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
         access_token: data.access_token,
         refresh_token: data.refresh_token,
       });
       if (sessionError || !sessionData.session) {
-        const message = sessionError?.message || 'Unable to start a session.';
+        const message = toLoginErrorMessage(sessionError ?? new Error('Unable to start a session.'));
         setError(message);
         throw new Error(message);
       }
+      storeEmployeeSessionId(data.employee_session_id);
       setSession(sessionData.session);
-      await loadProfile(sessionData.session);
+      await loadProfile(sessionData.session, { rethrow: true });
     } catch (err) {
-      const message = toErrorMessage(err, 'Unable to sign in. Check your credentials.');
+      console.error('Sign-in failed', err);
+      const message = toLoginErrorMessage(err);
       setError(message);
-      throw err instanceof Error ? err : new Error(message);
+      throw new Error(message);
     }
   }, [loadProfile]);
 
   const signOut = useCallback(async () => {
     setError(null);
+    const employeeSessionId = readEmployeeSessionId();
+    try {
+      if (profile?.role === 'EMPLOYEE' || employeeSessionId) {
+        await api.post('/auth/employee-sessions/logout', {
+          employee_session_id: employeeSessionId || undefined,
+        });
+      }
+    } catch (err) {
+      console.error('Employee session tracking failed on logout', err);
+    } finally {
+      clearEmployeeSessionId();
+    }
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
-  }, []);
+  }, [profile]);
 
   const requestPasswordReset = useCallback(async (email: string) => {
     const redirectTo = `${window.location.origin}/reset-password`;

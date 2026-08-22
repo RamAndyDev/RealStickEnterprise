@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { Badge, Button, EmptyState, ErrorBanner, Field, LoadingBlock, StatCard } from '../../components/ui';
+import { ActionButton, ActionsTd, ActionsTh, Badge, EmptyState, ErrorBanner, Field, LoadingBlock, StatCard } from '../../components/ui';
 import { fetchEmployeeDailySales } from '../../lib/reportsApi';
 import { formatINR } from '../../types/pos';
 import { formatBillDateTime, paymentLabel } from '../../types/orders';
@@ -105,7 +105,7 @@ export function DailySalesPage() {
                       <th className="px-4 py-3 font-semibold">Time</th>
                       <th className="px-4 py-3 font-semibold">Payment</th>
                       <th className="px-4 py-3 font-semibold">Amount</th>
-                      <th className="px-4 py-3 font-semibold">Action</th>
+                      <ActionsTh>Action</ActionsTh>
                     </tr>
                   </thead>
                   <tbody>
@@ -119,20 +119,14 @@ export function DailySalesPage() {
                             <Badge tone="navy">{paymentLabel(bill.payment_method)}</Badge>
                           </td>
                           <td className="px-4 py-3 font-semibold">{formatINR(bill.total_amount)}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-2">
-                              <Link to={`/bills/${bill.id}`}>
-                                <Button size="sm" variant="outline">
-                                  View
-                                </Button>
-                              </Link>
-                              <a href={`/print/receipt/${bill.id}?from=daily-sales`} target="_blank" rel="noreferrer">
-                                <Button size="sm" variant="muted">
-                                  Print
-                                </Button>
-                              </a>
-                            </div>
-                          </td>
+                          <ActionsTd>
+                            <Link to={`/bills/${bill.id}`}>
+                              <ActionButton variant="outline">View</ActionButton>
+                            </Link>
+                            <a href={`/print/receipt/${bill.id}?from=daily-sales`} target="_blank" rel="noreferrer">
+                              <ActionButton variant="muted">Print</ActionButton>
+                            </a>
+                          </ActionsTd>
                         </tr>
                       );
                     })}

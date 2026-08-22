@@ -2,7 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from '../components/layout/AppShell';
 import { PublicLayout } from '../components/layout/PublicLayout';
+import { AuditProtectedRoute } from '../components/routing/AuditProtectedRoute';
 import { ProtectedRoute } from '../components/routing/ProtectedRoute';
+import { AuthenticatedDocumentTitle } from '../components/seo/AuthenticatedDocumentTitle';
 import { ForgotPasswordPage } from '../features/auth/ForgotPasswordPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { ProfilePage } from '../features/auth/ProfilePage';
@@ -39,6 +41,7 @@ import { AuditDetailPage } from '../features/audits/AuditDetailPage';
 export default function App() {
   return (
     <>
+    <AuthenticatedDocumentTitle />
     <InactivityGuard />
     <Routes>
       <Route element={<PublicLayout />}>
@@ -66,6 +69,9 @@ export default function App() {
           <Route element={<ProtectedRoute roles={['SYSTEM_ADMIN', 'FRANCHISE_OWNER']} />}>
             <Route path="dashboard" element={<HomePage />} />
             <Route path="reports" element={<ReportsPage />} />
+          </Route>
+
+          <Route element={<AuditProtectedRoute />}>
             <Route path="audit" element={<AuditsPage />} />
             <Route path="audit/new" element={<CreateAuditPage />} />
             <Route path="audit/:auditId" element={<AuditDetailPage />} />

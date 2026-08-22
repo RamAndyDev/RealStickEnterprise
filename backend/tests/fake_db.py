@@ -227,6 +227,12 @@ class FakeQuery:
                             and str(existing.get('product_id')) == str(row.get('product_id'))
                         ):
                             raise Exception('duplicate key value violates unique constraint')
+                if self._table == 'system_settings':
+                    if not row.get('key'):
+                        raise Exception('system_settings.key is required')
+                    for existing in table_rows:
+                        if existing.get('key') == row.get('key'):
+                            raise Exception('duplicate key value violates unique constraint')
                 if self._table == 'gst_settings':
                     row.setdefault('is_active', True)
                     if row.get('is_active'):
@@ -372,6 +378,12 @@ class FakeQuery:
 
         if self._action == 'delete':
             matched = self._apply_filters(table_rows)
+            if self._table == 'products':
+                self._db.enforce_product_delete_fks(matched)
+            if self._table == 'franchises':
+                self._db.enforce_franchise_delete_fks(matched)
+            if self._table == 'profiles':
+                self._db.enforce_profile_delete_fks(matched)
             deleted = [deepcopy(r) for r in matched]
             ids = {str(r.get('id')) for r in matched}
             self._db.tables[self._table] = [
@@ -562,6 +574,7 @@ class FakeDatabase:
         products: list[dict] | None = None,
         franchise_product_prices: list[dict] | None = None,
         gst_settings: list[dict] | None = None,
+        system_settings: list[dict] | None = None,
         discounts: list[dict] | None = None,
         orders: list[dict] | None = None,
         order_items: list[dict] | None = None,
@@ -570,6 +583,10 @@ class FakeDatabase:
         promotion_franchises: list[dict] | None = None,
         franchise_audits: list[dict] | None = None,
         franchise_audit_items: list[dict] | None = None,
+        employee_sessions: list[dict] | None = None,
+        recipes: list[dict] | None = None,
+        recipe_items: list[dict] | None = None,
+        inventory_movements: list[dict] | None = None,
         auth_users: list[Any] | None = None,
     ):
         self.tables: dict[str, list[dict]] = {
@@ -582,6 +599,7 @@ class FakeDatabase:
             'products': deepcopy(products or []),
             'franchise_product_prices': deepcopy(franchise_product_prices or []),
             'gst_settings': deepcopy(gst_settings or []),
+            'system_settings': deepcopy(system_settings or []),
             'discounts': deepcopy(discounts or []),
             'orders': deepcopy(orders or []),
             'order_items': deepcopy(order_items or []),
@@ -590,6 +608,10 @@ class FakeDatabase:
             'promotion_franchises': deepcopy(promotion_franchises or []),
             'franchise_audits': deepcopy(franchise_audits or []),
             'franchise_audit_items': deepcopy(franchise_audit_items or []),
+            'employee_sessions': deepcopy(employee_sessions or []),
+            'recipes': deepcopy(recipes or []),
+            'recipe_items': deepcopy(recipe_items or []),
+            'inventory_movements': deepcopy(inventory_movements or []),
         }
         self.auth = FakeAuth(auth_users or [])
         self.storage_objects: dict[tuple[str, str], dict] = {}
@@ -604,36 +626,77 @@ class FakeDatabase:
 
     def enforce_selling_price(self, row: dict) -> None:
         selling = row.get('selling_price')
-        if selling is None:
-            return
-        if float(selling) <= 0:
+        if selling is None or float(selling) <= 0:
             raise Exception('Selling price must be greater than 0')
-        product = next(
-            (
-                item
-                for item in self.tables.get('products', [])
-                if str(item.get('id')) == str(row.get('product_id'))
-            ),
-            None,
-        )
-        if product is None:
-            raise Exception('Product not found')
-        if float(selling) >= float(product['price']):
-            raise Exception('Selling price must be strictly less than the master price')
 
     def enforce_master_price(self, product_row: dict) -> None:
-        master = product_row.get('price')
-        if master is None:
+        # Master price is independent of franchise selling prices.
+        return
+
+    def enforce_franchise_delete_fks(self, franchises: list[dict]) -> None:
+        """Mirror Postgres NO ACTION FKs on franchises.id. Checklist is deleted first."""
+        franchise_ids = {str(row.get('id')) for row in franchises if row.get('id')}
+        if not franchise_ids:
             return
-        for assignment in self.tables.get('franchise_product_prices', []):
-            if str(assignment.get('product_id')) != str(product_row.get('id')):
-                continue
-            if not assignment.get('is_active'):
-                continue
-            if float(assignment.get('selling_price') or 0) >= float(master):
-                raise Exception(
-                    'Master price cannot be reduced below existing franchise selling prices.'
-                )
+        for table, column in (
+            ('profiles', 'franchise_id'),
+            ('franchise_payments', 'franchise_id'),
+            ('orders', 'franchise_id'),
+            ('franchise_product_prices', 'franchise_id'),
+            ('inventory_movements', 'franchise_id'),
+            ('franchise_ingredient_stock', 'franchise_id'),
+            ('discounts', 'franchise_id'),
+            ('coupons', 'franchise_id'),
+            ('promotion_franchises', 'franchise_id'),
+            ('franchise_audits', 'franchise_id'),
+            ('quality_audits', 'franchise_id'),
+            ('gallery_items', 'franchise_id'),
+            ('franchise_applications', 'converted_franchise_id'),
+        ):
+            for row in self.tables.get(table, []):
+                if str(row.get(column) or '') in franchise_ids:
+                    raise Exception(
+                        'update or delete on table "franchises" violates foreign key constraint'
+                    )
+
+    def enforce_profile_delete_fks(self, profiles: list[dict]) -> None:
+        """Mirror Postgres NO ACTION / RESTRICT FKs on profiles.id."""
+        profile_ids = {str(row.get('id')) for row in profiles if row.get('id')}
+        if not profile_ids:
+            return
+        for table, column in (
+            ('orders', 'cashier_id'),
+            ('franchise_audits', 'auditor_id'),
+            ('quality_audits', 'auditor_id'),
+            ('gallery_items', 'uploaded_by'),
+            ('inventory_movements', 'created_by'),
+            ('franchise_applications', 'reviewed_by'),
+            ('launch_checklist_items', 'completed_by'),
+            ('promotions', 'created_by'),
+            ('discounts', 'created_by'),
+            ('employee_sessions', 'employee_id'),
+        ):
+            for row in self.tables.get(table, []):
+                if str(row.get(column) or '') in profile_ids:
+                    raise Exception(
+                        'update or delete on table "profiles" violates foreign key constraint'
+                    )
+
+    def enforce_product_delete_fks(self, products: list[dict]) -> None:
+        """Mirror Postgres NO ACTION FKs on products.id. No CASCADE."""
+        product_ids = {str(row.get('id')) for row in products if row.get('id')}
+        if not product_ids:
+            return
+        for table, column in (
+            ('franchise_product_prices', 'product_id'),
+            ('order_items', 'product_id'),
+            ('recipes', 'product_id'),
+        ):
+            for row in self.tables.get(table, []):
+                if str(row.get(column) or '') in product_ids:
+                    raise Exception(
+                        'update or delete on table "products" violates foreign key constraint'
+                    )
 
     def enforce_profile_rules(
         self,

@@ -22,6 +22,7 @@ REPORT_ENDPOINTS = (
     '/api/v1/reports/daily',
     '/api/v1/reports/products',
     '/api/v1/reports/payments',
+    '/api/v1/reports/export',
     '/api/v1/reports/dashboard/admin',
     '/api/v1/reports/dashboard/owner',
 )
@@ -681,3 +682,198 @@ def test_reports_use_historical_snapshots_not_live_prices(client, auth_header_fa
     assert products[0]['revenue'] == original_line
     assert dashboard['today_revenue'] == original_total
     assert dashboard['top_product_name'] == 'Nimbu Pudina'
+
+
+# ── Custom date range ───────────────────────────────────────────────────────
+
+
+def _custom_params(start: str, end: str) -> dict[str, str]:
+    return {'period': 'custom', 'start_date': start, 'end_date': end}
+
+
+def test_custom_range_filters_completed_orders(client, auth_header_factory, fake_db):
+    in_range = _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=50,
+        payment_method='CASH',
+        completed_at=datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=999,
+        payment_method='UPI',
+        completed_at=datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    body = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params=_custom_params('2026-08-01', '2026-08-10'),
+    ).json()
+    assert body['orders'] == 1
+    assert body['revenue'] == 50
+    assert [bill['id'] for bill in body['recent_bills']] == [in_range]
+
+
+def test_custom_range_same_start_and_end_date(client, auth_header_factory, fake_db):
+    included = _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=40,
+        payment_method='CARD',
+        completed_at=datetime(2026, 8, 10, 8, 15, tzinfo=timezone.utc).isoformat(),
+    )
+    _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=80,
+        payment_method='CASH',
+        completed_at=datetime(2026, 8, 9, 23, 59, 59, tzinfo=timezone.utc).isoformat(),
+    )
+    body = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params=_custom_params('2026-08-10', '2026-08-10'),
+    ).json()
+    assert body['orders'] == 1
+    assert body['revenue'] == 40
+    assert [bill['id'] for bill in body['recent_bills']] == [included]
+
+
+def test_custom_range_end_date_is_inclusive(client, auth_header_factory, fake_db):
+    late_on_end = _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=25,
+        payment_method='UPI',
+        completed_at=datetime(2026, 8, 10, 23, 59, 59, tzinfo=timezone.utc).isoformat(),
+    )
+    start_of_range = _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=15,
+        payment_method='CASH',
+        completed_at=datetime(2026, 8, 1, 0, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=70,
+        payment_method='CARD',
+        completed_at=datetime(2026, 8, 11, 0, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    body = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params=_custom_params('2026-08-01', '2026-08-10'),
+    ).json()
+    assert body['orders'] == 2
+    assert body['revenue'] == 40
+    assert {bill['id'] for bill in body['recent_bills']} == {late_on_end, start_of_range}
+
+
+def test_custom_range_rejects_start_after_end(client, auth_header_factory):
+    response = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params=_custom_params('2026-08-10', '2026-08-01'),
+    )
+    assert response.status_code == 422
+    assert response.json()['detail'] == 'Start date cannot be after end date.'
+
+
+def test_custom_range_requires_start_and_end_dates(client, auth_header_factory):
+    missing_start = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params={'period': 'custom', 'end_date': '2026-08-10'},
+    )
+    missing_end = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params={'period': 'custom', 'start_date': '2026-08-01'},
+    )
+    assert missing_start.status_code == 422
+    assert missing_start.json()['detail'] == 'Start date is required.'
+    assert missing_end.status_code == 422
+    assert missing_end.json()['detail'] == 'End date is required.'
+
+
+def test_predefined_period_ignores_custom_dates(client, auth_header_factory, fake_db):
+    created = _checkout(client, _employee(auth_header_factory), payment_method='CASH')
+    assert created.status_code == 201
+    old_id = created.json()['id']
+    old = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc).isoformat()
+    row = next(item for item in fake_db.tables['orders'] if item['id'] == old_id)
+    row['completed_at'] = old
+    row['created_at'] = old
+
+    today = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params={'period': 'today', 'start_date': '2026-01-01', 'end_date': '2026-01-31'},
+    ).json()
+    assert today['orders'] == 0
+
+
+def test_custom_daily_series_covers_selected_days(client, auth_header_factory, fake_db):
+    _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=30,
+        payment_method='CASH',
+        completed_at=datetime(2026, 8, 10, 18, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    series = client.get(
+        '/api/v1/reports/daily',
+        headers=_owner(auth_header_factory),
+        params=_custom_params('2026-08-08', '2026-08-10'),
+    ).json()['items']
+    assert [point['date'] for point in series] == ['2026-08-08', '2026-08-09', '2026-08-10']
+    assert series[-1]['revenue'] == 30
+    assert series[0]['revenue'] == 0
+
+
+def test_owner_custom_range_stays_franchise_scoped(client, auth_header_factory, fake_db):
+    own = _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_A,
+        total_amount=22,
+        payment_method='CASH',
+        completed_at=datetime(2026, 8, 4, 10, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    _seed_order(
+        fake_db,
+        status='COMPLETED',
+        franchise_id=FRANCHISE_B,
+        total_amount=88,
+        payment_method='UPI',
+        completed_at=datetime(2026, 8, 4, 11, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    params = _custom_params('2026-08-01', '2026-08-10')
+    owner = client.get(
+        '/api/v1/reports/summary',
+        headers=_owner(auth_header_factory),
+        params={**params, 'franchise_id': str(FRANCHISE_B)},
+    ).json()
+    assert owner['orders'] == 1
+    assert owner['revenue'] == 22
+    assert [bill['id'] for bill in owner['recent_bills']] == [own]
+
+    admin = client.get(
+        '/api/v1/reports/summary',
+        headers=_admin(auth_header_factory),
+        params=params,
+    ).json()
+    assert admin['orders'] == 2
+    assert admin['revenue'] == 110

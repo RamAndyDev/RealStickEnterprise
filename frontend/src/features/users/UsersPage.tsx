@@ -2,31 +2,57 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
+  ActionButton,
+  ActionMenu,
+  ActionMenuItem,
+  ActionMenuSeparator,
+  ActionsTd,
+  ActionsTh,
+  AdminListCard,
   Badge,
   Button,
   EmptyState,
   ErrorBanner,
-  LoadingBlock,
+  InitialsAvatar,
+  ListToolbar,
   Modal,
+  PageHeader,
+  SegmentedTabs,
   SuccessBanner,
+  TableSkeleton,
 } from '../../components/ui';
 import { listFranchises } from '../../lib/franchisesApi';
+import { safeApiErrorMessage } from '../../lib/validation';
 import {
   createAdminUser,
+  deleteAdminUser,
   listAdminUsers,
   resetAdminUserPassword,
   updateAdminUser,
 } from '../../lib/usersApi';
 import type { UserRole } from '../../types/auth';
 import type { ManagedUser } from '../../types/user';
-import { apiErrorMessage, formatDate } from '../franchises/status';
+import { apiErrorMessage } from '../franchises/status';
 import { roleLabel, roleTone } from './labels';
+import {
+  applyOwnerCreateResult,
+  classifyOwnerCreateError,
+  type OwnerCreateFieldErrors,
+} from './ownerForm';
+import {
+  DELETE_USER_CONFIRM_MESSAGE,
+  DELETE_USER_FALLBACK,
+  DELETE_USER_SUCCESS,
+  DELETE_USER_TITLE,
+  applyDeleteUserResult,
+} from './deleteUser';
+import { managedUserContact, managedUserFranchiseLabel } from './userListPresentation';
 import { UserDetail } from './UserDetail';
 import { UserForm, emptyUserForm, userToForm, type UserFormValues } from './UserForm';
 
 const ROLE_TABS: { id: '' | UserRole; label: string }[] = [
   { id: '', label: 'All' },
-  { id: 'SYSTEM_ADMIN', label: 'System Admins' },
+  { id: 'SYSTEM_ADMIN', label: 'Administrators' },
   { id: 'FRANCHISE_OWNER', label: 'Franchise Owners' },
 ];
 
@@ -40,8 +66,12 @@ export function UsersPage() {
   const [editTarget, setEditTarget] = useState<ManagedUser | null>(null);
   const [statusTarget, setStatusTarget] = useState<ManagedUser | null>(null);
   const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createFieldErrors, setCreateFieldErrors] = useState<OwnerCreateFieldErrors>({});
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -72,12 +102,20 @@ export function UsersPage() {
         franchise_id: values.role === 'SYSTEM_ADMIN' ? null : values.franchise_id,
       }),
     onSuccess: async (data) => {
+      const result = applyOwnerCreateResult(true);
       setShowAdd(false);
+      setCreateError(result.error);
+      setCreateFieldErrors({});
       setFeedback(data.message);
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     },
-    onError: (err) => setError(apiErrorMessage(err, 'Unable to create user.')),
+    onError: (err) => {
+      const classified = classifyOwnerCreateError(err);
+      const result = applyOwnerCreateResult(false, classified.formError);
+      setCreateError(result.error);
+      setCreateFieldErrors(classified.fieldErrors);
+    },
   });
 
   const updateMutation = useMutation({
@@ -109,6 +147,22 @@ export function UsersPage() {
     onError: (err) => setError(apiErrorMessage(err, 'Unable to update user status.')),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminUser(id),
+    onSuccess: async () => {
+      const result = applyDeleteUserResult(true);
+      setDeleteError(result.error);
+      setDeleteTarget(null);
+      setFeedback(DELETE_USER_SUCCESS);
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (err) => {
+      const result = applyDeleteUserResult(false, safeApiErrorMessage(err, DELETE_USER_FALLBACK));
+      setDeleteError(result.error);
+    },
+  });
+
   const resetMutation = useMutation({
     mutationFn: (id: string) => resetAdminUserPassword(id),
     onSuccess: async (data) => {
@@ -121,127 +175,234 @@ export function UsersPage() {
 
   const items = listQuery.data?.items ?? [];
   const franchises = franchisesQuery.data?.items ?? [];
-  const createInitial = useMemo(() => emptyUserForm(roleFilter || 'SYSTEM_ADMIN'), [roleFilter]);
+  const createInitial = useMemo(
+    () => emptyUserForm(roleFilter || 'SYSTEM_ADMIN'),
+    [roleFilter],
+  );
+
+  function openAdd() {
+    setCreateError(null);
+    setCreateFieldErrors({});
+    setShowAdd(true);
+  }
+
+  function moreMenu(item: ManagedUser) {
+    return (
+      <ActionMenu label={`More actions for ${item.full_name}`}>
+        <ActionMenuItem onClick={() => setViewTarget(item)}>View</ActionMenuItem>
+        <ActionMenuItem onClick={() => setEditTarget(item)}>Edit</ActionMenuItem>
+        <ActionMenuItem onClick={() => setResetTarget(item)}>Reset Password</ActionMenuItem>
+        <ActionMenuItem onClick={() => setStatusTarget(item)}>
+          {item.is_active ? 'Deactivate' : 'Activate'}
+        </ActionMenuItem>
+        <ActionMenuSeparator />
+        <ActionMenuItem
+          destructive
+          onClick={() => {
+            setDeleteError(null);
+            setDeleteTarget(item);
+          }}
+        >
+          Delete
+        </ActionMenuItem>
+      </ActionMenu>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1A1A18]">User Management</h1>
-          <p className="text-xs text-[#8A8A84]">
-            {listQuery.isLoading ? 'Loading…' : `${listQuery.data?.total ?? 0} users`}
-          </p>
-        </div>
-        <Button onClick={() => setShowAdd(true)}>+ Add User</Button>
-      </div>
+      <PageHeader
+        title="User Management"
+        description="Manage system administrators and franchise owners."
+        action={<Button onClick={openAdd}>+ Add User</Button>}
+      />
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {ROLE_TABS.map((tab) => (
-          <button
-            key={tab.id || 'all'}
-            type="button"
-            onClick={() => setRoleFilter(tab.id)}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-              roleFilter === tab.id
-                ? 'bg-[#0D4F2E] text-white'
-                : 'bg-white text-[#4A4A46] ring-1 ring-[#E0DDD5]'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs items={ROLE_TABS} value={roleFilter} onChange={setRoleFilter} />
 
-      <input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search by name, email, phone, or franchise"
-        className="mb-4 w-full rounded-lg border border-[#E0DDD5] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1A7A4A]"
+      <ListToolbar
+        search={search}
+        searchPlaceholder="Search by name, email, phone, or franchise"
+        onSearchChange={setSearch}
       />
 
       {feedback ? (
-        <div className="mb-3">
+        <div className="mb-4">
           <SuccessBanner message={feedback} />
         </div>
       ) : null}
-      {error ? (
-        <div className="mb-3">
+      {error && !showAdd && !deleteTarget ? (
+        <div className="mb-4">
           <ErrorBanner message={error} />
         </div>
       ) : null}
 
-      {listQuery.isLoading ? <LoadingBlock label="Loading users…" /> : null}
+      {listQuery.isLoading ? <TableSkeleton /> : null}
       {listQuery.isError ? (
         <ErrorBanner message={apiErrorMessage(listQuery.error, 'Unable to load users.')} />
       ) : null}
 
       {!listQuery.isLoading && !listQuery.isError && items.length === 0 ? (
-        <EmptyState title="No users found" hint="Create a user or adjust the current filters." />
+        <EmptyState
+          title="No users found"
+          hint="Try changing your filters or add a new user."
+          action={<Button onClick={openAdd}>+ Add User</Button>}
+        />
       ) : null}
 
       {!listQuery.isLoading && items.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-[#E0DDD5] bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Name</th>
-                <th className="px-4 py-3 font-semibold">Email</th>
-                <th className="px-4 py-3 font-semibold">Role</th>
-                <th className="px-4 py-3 font-semibold">Franchise</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Created</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b border-[#E0DDD5] last:border-b-0">
-                  <td className="px-4 py-3 font-semibold">{item.full_name}</td>
-                  <td className="px-4 py-3">{item.email ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={roleTone(item.role)}>{roleLabel(item.role)}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    {item.role === 'SYSTEM_ADMIN' ? '—' : (item.franchise_name ?? '—')}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={item.is_active ? 'green' : 'muted'}>
-                      {item.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">{formatDate(item.created_at)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setViewTarget(item)}>
-                        View
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditTarget(item)}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setStatusTarget(item)}>
-                        {item.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                      <Button size="sm" variant="muted" onClick={() => setResetTarget(item)}>
-                        Reset Password
-                      </Button>
-                    </div>
-                  </td>
+        <>
+          <div className="hidden overflow-x-auto rounded-xl border border-[#E8E6E0] bg-white shadow-[0_1px_2px_rgba(0,0,0,.04)] lg:block">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-[#E8E6E0] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
+                <tr>
+                  <th className="w-[28%] px-5 py-3 font-semibold">User</th>
+                  <th className="w-[14%] px-5 py-3 font-semibold">Role</th>
+                  <th className="w-[18%] px-5 py-3 font-semibold">Franchise</th>
+                  <th className="w-[16%] px-5 py-3 font-semibold">Contact</th>
+                  <th className="w-[10%] px-5 py-3 font-semibold">Status</th>
+                  <ActionsTh className="px-5" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-b border-[#F0EEE8] last:border-b-0 hover:bg-[#FDFAF4]"
+                  >
+                    <td className="px-5 py-4 align-middle">
+                      <button
+                        type="button"
+                        className="flex items-center gap-3 rounded-md text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A7A4A]"
+                        onClick={() => setViewTarget(item)}
+                      >
+                        <InitialsAvatar name={item.full_name} />
+                        <span className="min-w-0">
+                          <span className="block text-[14px] font-semibold text-[#1A1A18]">
+                            {item.full_name}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-[#8A8A84]">
+                            {item.email ?? '—'}
+                          </span>
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-5 py-4 align-middle">
+                      <Badge variant="soft" tone={roleTone(item.role)}>
+                        {roleLabel(item.role)}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-4 align-middle text-[13px] text-[#4A4A46]">
+                      {managedUserFranchiseLabel(item)}
+                    </td>
+                    <td className="px-5 py-4 align-middle text-[13px] text-[#5C5C56]">
+                      {managedUserContact(item)}
+                    </td>
+                    <td className="px-5 py-4 align-middle">
+                      <Badge variant="soft" tone={item.is_active ? 'green' : 'muted'}>
+                        {item.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </td>
+                    <ActionsTd className="px-5 py-4">
+                      <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
+                        Edit
+                      </ActionButton>
+                      {moreMenu(item)}
+                    </ActionsTd>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid gap-3 lg:hidden">
+            {items.map((item) => (
+              <AdminListCard key={`card-${item.id}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    className="flex min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A7A4A]"
+                    onClick={() => setViewTarget(item)}
+                  >
+                    <InitialsAvatar name={item.full_name} />
+                    <span className="min-w-0">
+                      <span className="block text-[15px] font-semibold text-[#1A1A18]">
+                        {item.full_name}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[#8A8A84]">{item.email ?? '—'}</span>
+                    </span>
+                  </button>
+                  <Badge variant="soft" tone={item.is_active ? 'green' : 'muted'}>
+                    {item.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+
+                <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-[#F0EEE8] pt-3 text-sm">
+                  <div>
+                    <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                      Role
+                    </dt>
+                    <dd className="mt-1">
+                      <Badge variant="soft" tone={roleTone(item.role)}>
+                        {roleLabel(item.role)}
+                      </Badge>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                      Contact
+                    </dt>
+                    <dd className="mt-1 text-[13px] text-[#5C5C56]">{managedUserContact(item)}</dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-[10px] font-medium uppercase tracking-[.05em] text-[#8A8A84]">
+                      Franchise
+                    </dt>
+                    <dd className="mt-1 text-[13px] text-[#4A4A46]">{managedUserFranchiseLabel(item)}</dd>
+                  </div>
+                </dl>
+
+                <div className="mt-4 flex items-center gap-1.5 border-t border-[#F0EEE8] pt-3">
+                  <ActionButton variant="outline" onClick={() => setEditTarget(item)}>
+                    Edit
+                  </ActionButton>
+                  {moreMenu(item)}
+                </div>
+              </AdminListCard>
+            ))}
+          </div>
+        </>
       ) : null}
 
       {showAdd ? (
-        <Modal title="Add User" onClose={() => setShowAdd(false)}>
+        <Modal
+          title="Add User"
+          onClose={() => {
+            setShowAdd(false);
+            setCreateError(null);
+            setCreateFieldErrors({});
+          }}
+        >
           <UserForm
             mode="create"
             initial={createInitial}
             franchises={franchises}
             submitting={createMutation.isPending}
-            onCancel={() => setShowAdd(false)}
-            onSubmit={(values) => createMutation.mutate(values)}
+            formError={createError}
+            apiFieldErrors={createFieldErrors}
+            onCancel={() => {
+              setShowAdd(false);
+              setCreateError(null);
+              setCreateFieldErrors({});
+            }}
+            onClearSubmitError={() => {
+              setCreateError(null);
+              setCreateFieldErrors({});
+            }}
+            onSubmit={(values) => {
+              setCreateError(null);
+              setCreateFieldErrors({});
+              createMutation.mutate(values);
+            }}
           />
         </Modal>
       ) : null}
@@ -314,6 +475,43 @@ export function UsersPage() {
               onClick={() => resetMutation.mutate(resetTarget.id)}
             >
               {resetMutation.isPending ? 'Sending…' : 'Send reset'}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {deleteTarget ? (
+        <Modal
+          title={DELETE_USER_TITLE}
+          onClose={() => {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }}
+        >
+          <p className="text-sm text-[#1A1A18]">{DELETE_USER_CONFIRM_MESSAGE}</p>
+          <p className="mt-1 text-sm font-medium text-[#5C5C56]">{deleteTarget.full_name}</p>
+          {deleteError ? (
+            <div className="mt-3">
+              <ErrorBanner message={deleteError} />
+            </div>
+          ) : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="muted"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
             </Button>
           </div>
         </Modal>

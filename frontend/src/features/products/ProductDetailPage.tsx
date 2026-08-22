@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import {
+  ActionButton,
+  ActionGroup,
   Badge,
   Button,
   EmptyState,
@@ -27,7 +29,9 @@ import {
   type FranchiseProductAssignment,
 } from '../../types/product';
 import { apiErrorMessage } from '../franchises/status';
+import { assignmentUpdateSuccessMessage } from './assignmentUpdate';
 import { categoryColor } from './categoryColors';
+import { DeleteProductDialog } from './DeleteProductDialog';
 import { ProductImage } from './ProductImage';
 
 type FranchiseAssignmentRow = FranchiseProductAssignment & {
@@ -36,6 +40,7 @@ type FranchiseAssignmentRow = FranchiseProductAssignment & {
 
 export function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +50,7 @@ export function ProductDetailPage() {
   const [assignActive, setAssignActive] = useState(true);
   const [editAssignment, setEditAssignment] = useState<FranchiseAssignmentRow | null>(null);
   const [editPrice, setEditPrice] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
 
   const productQuery = useQuery({
     queryKey: ['admin-product', productId],
@@ -124,9 +130,9 @@ export function ProductDetailPage() {
       selling_price?: number;
       is_active?: boolean;
     }) => updateFranchiseProduct(franchise_id, productId!, { selling_price, is_active }),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       setEditAssignment(null);
-      setFeedback('Franchise pricing updated.');
+      setFeedback(assignmentUpdateSuccessMessage(variables));
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-product-assignments', productId] });
     },
@@ -193,14 +199,19 @@ export function ProductDetailPage() {
             <div className="font-serif text-2xl font-bold text-[#1A7A4A]">
               {formatINR(product.price)}
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-2"
-              onClick={() => toggleProductMutation.mutate(!product.is_active)}
-            >
-              {product.is_active ? 'Set Hidden' : 'Set Active'}
-            </Button>
+            <p className="mt-0.5 text-[10px] text-[#8A8A84]">Reference only</p>
+            <ActionGroup align="end" className="mt-2">
+              <ActionButton
+                fit="lg"
+                variant="outline"
+                onClick={() => toggleProductMutation.mutate(!product.is_active)}
+              >
+                {product.is_active ? 'Set Hidden' : 'Set Active'}
+              </ActionButton>
+              <ActionButton variant="danger" onClick={() => setShowDelete(true)}>
+                Delete
+              </ActionButton>
+            </ActionGroup>
           </div>
         </div>
       </div>
@@ -209,7 +220,8 @@ export function ProductDetailPage() {
         <div>
           <h2 className="font-serif text-lg font-bold text-[#1A1A18]">Franchise pricing</h2>
           <p className="text-xs text-[#8A8A84]">
-            Selling price is what POS will use. Assignment Active/Hidden controls franchise availability.
+            Franchise selling price is independent of master price. Assignment Active/Hidden
+            controls franchise availability.
           </p>
         </div>
         <Button
@@ -247,48 +259,59 @@ export function ProductDetailPage() {
                   {row.franchise_name ?? row.franchise_id}
                 </div>
                 <div className="text-[11px] text-[#8A8A84]">
-                  Master {formatINR(row.master_price)} ·{' '}
+                  Master {formatINR(row.master_price)} · Reference only ·{' '}
                   {row.available_for_pos ? 'Available for POS' : 'Not available for POS'}
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[.05em] text-[#8A8A84]">
-                  Selling price
+                  Franchise Selling Price
                 </div>
                 <div className="font-serif text-base font-bold text-[#1A7A4A]">
                   {formatINR(row.selling_price)}
                 </div>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setEditAssignment(row);
-                  setEditPrice(String(row.selling_price));
-                }}
-              >
-                Edit price
-              </Button>
-              <button
-                type="button"
-                onClick={() =>
-                  updateAssignmentMutation.mutate({
-                    franchise_id: row.franchise_id,
-                    is_active: !row.is_active,
-                  })
-                }
-                className="rounded-md border border-[#E0DDD5] px-2.5 py-1 text-[11px] font-semibold"
-                style={{
-                  background: row.is_active ? '#E6F4EC' : '#FDFAF4',
-                  color: row.is_active ? '#1A7A4A' : '#8A8A84',
-                }}
-              >
-                {row.is_active ? 'Assignment Active' : 'Assignment Hidden'}
-              </button>
+              <ActionGroup>
+                <ActionButton
+                  fit="lg"
+                  variant="outline"
+                  onClick={() => {
+                    setEditAssignment(row);
+                    setEditPrice(String(row.selling_price));
+                  }}
+                >
+                  Edit price
+                </ActionButton>
+                <ActionButton
+                  fit="xl"
+                  variant={row.is_active ? 'outline' : 'muted'}
+                  onClick={() =>
+                    updateAssignmentMutation.mutate({
+                      franchise_id: row.franchise_id,
+                      is_active: !row.is_active,
+                    })
+                  }
+                >
+                  {row.is_active ? 'Assignment Active' : 'Assignment Hidden'}
+                </ActionButton>
+              </ActionGroup>
             </div>
           ))}
         </div>
       )}
+
+      {showDelete ? (
+        <DeleteProductDialog
+          productId={product.id}
+          productName={product.name}
+          onClose={() => setShowDelete(false)}
+          onDeleted={async () => {
+            await queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+            await queryClient.invalidateQueries({ queryKey: ['admin-product'] });
+            navigate('/products', { state: { productDeleted: true } });
+          }}
+        />
+      ) : null}
 
       {showAssign ? (
         <Modal title="Assign to franchise" onClose={() => setShowAssign(false)}>
@@ -304,13 +327,17 @@ export function ProductDetailPage() {
               </option>
             ))}
           </SelectField>
+          <p className="mb-0.5 text-sm text-[#5C5C56]">
+            Master Price {formatINR(product.price)}
+          </p>
+          <p className="mb-3 text-[11px] text-[#8A8A84]">Master Price is for reference only.</p>
           <Field
             label="Franchise Selling Price (₹)"
             type="number"
             min={0.01}
             step="0.01"
             value={sellingPrice}
-            error={sellingPrice ? sellingPriceError(sellingPrice, product.price) ?? undefined : undefined}
+            error={sellingPrice ? sellingPriceError(sellingPrice) ?? undefined : undefined}
             onChange={(e) => setSellingPrice(e.target.value)}
           />
           <label className="mb-3 flex items-center gap-2 text-sm text-[#4A4A46]">
@@ -322,8 +349,7 @@ export function ProductDetailPage() {
             Assignment Active (uncheck to hide from this franchise POS)
           </label>
           <p className="mb-3 text-[11px] text-[#8A8A84]">
-            Master price for this item: {formatINR(product.price)}. Selling price must be greater
-            than 0 and strictly less than the master price.
+            Set the selling price for this franchise.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="muted" onClick={() => setShowAssign(false)}>
@@ -332,7 +358,7 @@ export function ProductDetailPage() {
             <Button
               disabled={
                 !franchiseId ||
-                Boolean(sellingPriceError(sellingPrice, product.price)) ||
+                Boolean(sellingPriceError(sellingPrice)) ||
                 assignMutation.isPending
               }
               onClick={() => assignMutation.mutate()}
@@ -345,20 +371,24 @@ export function ProductDetailPage() {
 
       {editAssignment ? (
         <Modal title="Edit franchise selling price" onClose={() => setEditAssignment(null)}>
-          <p className="mb-3 text-sm text-[#5C5C56]">
-            {editAssignment.franchise_name} · Master {formatINR(product.price)}
+          <p className="mb-0.5 text-sm font-medium text-[#1A1A18]">
+            {editAssignment.franchise_name}
           </p>
+          <p className="mb-0.5 text-sm text-[#5C5C56]">
+            Master Price {formatINR(product.price)}
+          </p>
+          <p className="mb-3 text-[11px] text-[#8A8A84]">Master Price is for reference only.</p>
           <Field
             label="Franchise Selling Price (₹)"
             type="number"
             min={0.01}
             step="0.01"
             value={editPrice}
-            error={sellingPriceError(editPrice, product.price) ?? undefined}
+            error={sellingPriceError(editPrice) ?? undefined}
             onChange={(e) => setEditPrice(e.target.value)}
           />
           <p className="mb-3 text-[11px] text-[#8A8A84]">
-            Must be greater than 0 and strictly less than the master price.
+            Set the selling price for this franchise.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="muted" onClick={() => setEditAssignment(null)}>
@@ -366,7 +396,7 @@ export function ProductDetailPage() {
             </Button>
             <Button
               disabled={
-                Boolean(sellingPriceError(editPrice, product.price)) ||
+                Boolean(sellingPriceError(editPrice)) ||
                 updateAssignmentMutation.isPending
               }
               onClick={() =>

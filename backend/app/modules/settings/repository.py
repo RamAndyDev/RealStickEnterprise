@@ -6,6 +6,7 @@ from uuid import UUID
 from app.db.supabase import get_supabase
 
 GST_COLUMNS = 'id, rate, is_active, created_at, updated_at'
+SYSTEM_SETTING_COLUMNS = 'key, value, created_at, updated_at'
 OFFER_COLUMNS = (
     'id, name, description, discount_type, discount_value, is_active, '
     'valid_from, valid_to, franchise_id, promotion_id, created_by, created_at, updated_at'
@@ -19,6 +20,37 @@ PROMOTION_COLUMNS = (
 class SettingsRepository:
     def __init__(self) -> None:
         self._db = get_supabase()
+
+    def get_system_setting(self, key: str) -> dict[str, Any] | None:
+        response = (
+            self._db.table('system_settings')
+            .select(SYSTEM_SETTING_COLUMNS)
+            .eq('key', key)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        return rows[0] if rows else None
+
+    def upsert_system_setting(self, key: str, value: Any) -> dict[str, Any]:
+        existing = self.get_system_setting(key)
+        if existing:
+            response = (
+                self._db.table('system_settings')
+                .update({'value': value})
+                .eq('key', key)
+                .execute()
+            )
+        else:
+            response = (
+                self._db.table('system_settings')
+                .insert({'key': key, 'value': value})
+                .execute()
+            )
+        rows = response.data or []
+        if not rows:
+            raise RuntimeError('System setting was not saved')
+        return rows[0]
 
     def get_active_gst(self) -> dict[str, Any] | None:
         response = (

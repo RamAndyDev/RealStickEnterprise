@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { Badge, Button, EmptyState, ErrorBanner, Field, LoadingBlock, SelectField } from '../../components/ui';
+import { ActionButton, ActionsTd, ActionsTh, Badge, Button, EmptyState, ErrorBanner, Field, LoadingBlock, SelectField } from '../../components/ui';
 import { useAuth } from '../auth/AuthProvider';
 import { listFranchises } from '../../lib/franchisesApi';
 import { listAudits } from '../../lib/auditsApi';
@@ -131,7 +131,7 @@ export function AuditsPage() {
                   <th className="px-4 py-3 font-semibold">Auditor</th>
                   <th className="px-4 py-3 font-semibold">Overall Result</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
-                  <th className="px-4 py-3 font-semibold">Action</th>
+                  <ActionsTh>Action</ActionsTh>
                 </tr>
               </thead>
               <tbody>
@@ -146,13 +146,11 @@ export function AuditsPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3">{formatAuditCreated(item.created_at)}</td>
-                    <td className="px-4 py-3">
+                    <ActionsTd>
                       <Link to={`/audit/${item.id}`}>
-                        <Button size="sm" variant="outline">
-                          View
-                        </Button>
+                        <ActionButton variant="outline">View</ActionButton>
                       </Link>
-                    </td>
+                    </ActionsTd>
                   </tr>
                 ))}
               </tbody>

@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import {
+  ActionButton,
+  ActionGroup,
+  ActionsTh,
   Button,
   EmptyState,
   ErrorBanner,
@@ -24,6 +27,8 @@ import {
 import { formatINR, type Product, type ProductCategory } from '../../types/product';
 import { apiErrorMessage } from '../franchises/status';
 import { categoryColor } from './categoryColors';
+import { DELETE_PRODUCT_SUCCESS } from './deleteProduct';
+import { DeleteProductDialog } from './DeleteProductDialog';
 import {
   ProductForm,
   emptyProductForm,
@@ -35,16 +40,18 @@ import { ProductImage } from './ProductImage';
 
 export function MenuPage() {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editCategory, setEditCategory] = useState<ProductCategory | null>(null);
   const [categoryName, setCategoryName] = useState('');
-  const [categoryOrder, setCategoryOrder] = useState('0');
   const [categoryActive, setCategoryActive] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +60,14 @@ export function MenuPage() {
     const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => window.clearTimeout(handle);
   }, [search]);
+
+  useEffect(() => {
+    const state = location.state as { productDeleted?: boolean } | null;
+    if (!state?.productDeleted) return;
+    setFeedback(DELETE_PRODUCT_SUCCESS);
+    setError(null);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const categoriesQuery = useQuery({
     queryKey: ['admin-product-categories'],
@@ -158,7 +173,7 @@ export function MenuPage() {
     mutationFn: () =>
       createProductCategory({
         name: categoryName.trim(),
-        display_order: Number(categoryOrder) || 0,
+        display_order: (categories.length + 1) * 10,
         is_active: categoryActive,
       }),
     onSuccess: async () => {
@@ -177,7 +192,7 @@ export function MenuPage() {
       payload,
     }: {
       id: string;
-      payload: Partial<{ name: string; display_order: number; is_active: boolean }>;
+      payload: Partial<{ name: string; is_active: boolean }>;
     }) => updateProductCategory(id, payload),
     onSuccess: async (_data, variables) => {
       setEditCategory(null);
@@ -258,7 +273,6 @@ export function MenuPage() {
             variant="outline"
             onClick={() => {
               setCategoryName('');
-              setCategoryOrder(String((categories.length + 1) * 10));
               setCategoryActive(true);
               setShowCategoryModal(true);
             }}
@@ -266,67 +280,73 @@ export function MenuPage() {
             + Add Category
           </Button>
         </div>
-        <div className="overflow-hidden rounded-[10px] border border-[#E0DDD5] bg-white">
-          <div className="grid grid-cols-[1.4fr_0.7fr_0.5fr_1fr] gap-2 border-b border-[#E0DDD5] bg-[#FDFAF4] px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[.06em] text-[#8A8A84]">
-            <div>Category Name</div>
-            <div>Status</div>
-            <div>Order</div>
-            <div className="text-right">Actions</div>
-          </div>
-          {categories.map((category, idx) => (
-            <div
-              key={category.id}
-              className="grid grid-cols-[1.4fr_0.7fr_0.5fr_1fr] items-center gap-2 px-3.5 py-2.5"
-              style={{
-                borderBottom: idx < categories.length - 1 ? '1px solid #E0DDD5' : undefined,
-                opacity: category.is_active ? 1 : 0.55,
-              }}
-            >
-              <div
-                className="truncate text-[13px] font-medium"
-                style={{ color: categoryColor(category.name) }}
-              >
-                {category.name}
-              </div>
-              <div className="text-[11px] font-semibold text-[#5C5C56]">
-                {category.is_active ? 'Active' : 'Inactive'}
-              </div>
-              <div className="text-[12px] text-[#1A1A18]">{category.display_order}</div>
-              <div className="flex justify-end gap-1.5">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setEditCategory(category);
-                    setCategoryName(category.name);
-                    setCategoryOrder(String(category.display_order));
-                    setCategoryActive(category.is_active);
-                  }}
+        <div className="overflow-x-auto rounded-[10px] border border-[#E0DDD5] bg-white">
+          <table className="w-full min-w-[40rem] table-fixed text-sm">
+            <colgroup>
+              <col />
+              <col className="w-32" />
+              <col className="w-[18rem]" />
+            </colgroup>
+            <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[10px] font-semibold uppercase tracking-[.06em] text-[#8A8A84]">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Category Name</th>
+                <th className="px-4 py-3 text-center font-semibold">Status</th>
+                <ActionsTh align="end" />
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((category) => (
+                <tr
+                  key={category.id}
+                  className="border-b border-[#E0DDD5] last:border-b-0"
+                  style={{ opacity: category.is_active ? 1 : 0.55 }}
                 >
-                  Edit
-                </Button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateCategoryMutation.mutate({
-                      id: category.id,
-                      payload: { is_active: !category.is_active },
-                    })
-                  }
-                  className="rounded-md border border-[#E0DDD5] px-2.5 py-1 text-[11px] font-semibold"
-                  style={{
-                    background: category.is_active ? '#E6F4EC' : '#FDFAF4',
-                    color: category.is_active ? '#1A7A4A' : '#8A8A84',
-                  }}
-                >
-                  {category.is_active ? 'Deactivate' : 'Activate'}
-                </button>
-              </div>
-            </div>
-          ))}
-          {!categories.length ? (
-            <div className="px-4 py-6 text-center text-xs text-[#8A8A84]">No categories yet</div>
-          ) : null}
+                  <td
+                    className="truncate px-4 py-3 text-left text-[13px] font-medium"
+                    style={{ color: categoryColor(category.name) }}
+                  >
+                    {category.name}
+                  </td>
+                  <td className="px-4 py-3 text-center text-[11px] font-semibold text-[#5C5C56]">
+                    {category.is_active ? 'Active' : 'Inactive'}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right align-middle">
+                    <ActionGroup align="end" className="!inline-flex !flex-nowrap">
+                      <ActionButton
+                        variant="outline"
+                        onClick={() => {
+                          setEditCategory(category);
+                          setCategoryName(category.name);
+                          setCategoryActive(category.is_active);
+                        }}
+                      >
+                        Edit
+                      </ActionButton>
+                      <ActionButton
+                        fit="status"
+                        variant={category.is_active ? 'muted' : 'outline'}
+                        onClick={() =>
+                          updateCategoryMutation.mutate({
+                            id: category.id,
+                            payload: { is_active: !category.is_active },
+                          })
+                        }
+                      >
+                        {category.is_active ? 'Deactivate' : 'Activate'}
+                      </ActionButton>
+                    </ActionGroup>
+                  </td>
+                </tr>
+              ))}
+              {!categories.length ? (
+                <tr>
+                  <td colSpan={3} className="px-4 py-6 text-center text-xs text-[#8A8A84]">
+                    No categories yet
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -382,7 +402,7 @@ export function MenuPage() {
                 items.map((item, idx) => (
                   <div
                     key={item.id}
-                    className="flex items-center gap-2.5 px-3.5 py-2.5"
+                    className="flex flex-wrap items-center gap-2.5 px-3.5 py-2.5"
                     style={{
                       borderBottom: idx < items.length - 1 ? '1px solid #E0DDD5' : undefined,
                       opacity: item.is_active ? 1 : 0.5,
@@ -403,29 +423,29 @@ export function MenuPage() {
                     <div className="min-w-[42px] text-right font-serif text-sm font-bold text-[#1A7A4A]">
                       {formatINR(item.price)}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setPendingFile(null);
-                        setEditTarget(item);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        toggleMutation.mutate({ id: item.id, is_active: !item.is_active })
-                      }
-                      className="rounded-md border border-[#E0DDD5] px-2.5 py-1 text-[11px] font-semibold"
-                      style={{
-                        background: item.is_active ? '#E6F4EC' : '#FDFAF4',
-                        color: item.is_active ? '#1A7A4A' : '#8A8A84',
-                      }}
-                    >
-                      {item.is_active ? 'Active' : 'Hidden'}
-                    </button>
+                    <ActionGroup>
+                      <ActionButton
+                        variant="outline"
+                        onClick={() => {
+                          setPendingFile(null);
+                          setEditTarget(item);
+                        }}
+                      >
+                        Edit
+                      </ActionButton>
+                      <ActionButton
+                        fit="md"
+                        variant={item.is_active ? 'outline' : 'muted'}
+                        onClick={() =>
+                          toggleMutation.mutate({ id: item.id, is_active: !item.is_active })
+                        }
+                      >
+                        {item.is_active ? 'Active' : 'Hidden'}
+                      </ActionButton>
+                      <ActionButton variant="danger" onClick={() => setDeleteTarget(item)}>
+                        Delete
+                      </ActionButton>
+                    </ActionGroup>
                   </div>
                 ))
               )}
@@ -460,6 +480,19 @@ export function MenuPage() {
             onSubmit={(values) => createMutation.mutate(values)}
           />
         </Modal>
+      ) : null}
+
+      {deleteTarget ? (
+        <DeleteProductDialog
+          productId={deleteTarget.id}
+          productName={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={async () => {
+            setFeedback(DELETE_PRODUCT_SUCCESS);
+            setError(null);
+            await invalidate();
+          }}
+        />
       ) : null}
 
       {editTarget ? (
@@ -497,13 +530,6 @@ export function MenuPage() {
             onChange={(e) => setCategoryName(e.target.value)}
             placeholder="e.g. Summer Specials"
           />
-          <Field
-            label="Display Order"
-            type="number"
-            min={0}
-            value={categoryOrder}
-            onChange={(e) => setCategoryOrder(e.target.value)}
-          />
           <label className="mb-3 flex items-center gap-2 text-sm text-[#1A1A18]">
             <input
               type="checkbox"
@@ -533,13 +559,6 @@ export function MenuPage() {
             value={categoryName}
             onChange={(e) => setCategoryName(e.target.value)}
           />
-          <Field
-            label="Display Order"
-            type="number"
-            min={0}
-            value={categoryOrder}
-            onChange={(e) => setCategoryOrder(e.target.value)}
-          />
           <label className="mb-3 flex items-center gap-2 text-sm text-[#1A1A18]">
             <input
               type="checkbox"
@@ -559,7 +578,6 @@ export function MenuPage() {
                   id: editCategory.id,
                   payload: {
                     name: categoryName.trim(),
-                    display_order: Number(categoryOrder) || 0,
                     is_active: categoryActive,
                   },
                 })

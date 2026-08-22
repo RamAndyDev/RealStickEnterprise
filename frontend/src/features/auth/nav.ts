@@ -6,6 +6,17 @@ export type NavItem = {
   roles: UserRole[];
 };
 
+/**
+ * Role-level Audit eligibility. Franchise Owner visibility is also gated by
+ * the persisted Admin setting `franchise_owner_audit_enabled`.
+ * SYSTEM_ADMIN always sees Audit. EMPLOYEE never does.
+ */
+export const AUDIT_ACCESS_ROLES: UserRole[] = ['SYSTEM_ADMIN', 'FRANCHISE_OWNER'];
+
+export type NavVisibilityOptions = {
+  franchiseOwnerAuditEnabled?: boolean;
+};
+
 /** Role-aware staff navigation. Out-of-scope modules are omitted (inventory, recipes, applications). */
 export const APP_NAV: NavItem[] = [
   {
@@ -71,7 +82,7 @@ export const APP_NAV: NavItem[] = [
   {
     label: 'Audit',
     path: '/audit',
-    roles: ['SYSTEM_ADMIN', 'FRANCHISE_OWNER'],
+    roles: AUDIT_ACCESS_ROLES,
   },
   {
     label: 'Profile',
@@ -113,9 +124,28 @@ export const PUBLIC_NAV = [
   { label: 'Contact', path: '/contact' },
 ] as const;
 
-export function navForRole(role: UserRole | undefined | null): NavItem[] {
+export function canAccessAudit(
+  role: UserRole | undefined | null,
+  franchiseOwnerAuditEnabled: boolean | null | undefined,
+): boolean {
+  if (role === 'SYSTEM_ADMIN') return true;
+  if (role === 'FRANCHISE_OWNER') return franchiseOwnerAuditEnabled === true;
+  return false;
+}
+
+export function navForRole(
+  role: UserRole | undefined | null,
+  options?: NavVisibilityOptions,
+): NavItem[] {
   if (!role) return [];
-  return APP_NAV.filter((item) => item.roles.includes(role));
+  const ownerAuditEnabled = options?.franchiseOwnerAuditEnabled ?? false;
+  return APP_NAV.filter((item) => {
+    if (!item.roles.includes(role)) return false;
+    if (item.path === '/audit') {
+      return canAccessAudit(role, ownerAuditEnabled);
+    }
+    return true;
+  });
 }
 
 export function staffLandingPath(role: UserRole | undefined | null): string {

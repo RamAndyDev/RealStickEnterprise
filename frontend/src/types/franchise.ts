@@ -55,6 +55,16 @@ export type FranchisePayment = {
   updated_at: string;
 };
 
+export type FranchisePaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'UPI' | 'CHEQUE' | 'OTHER';
+
+export type FranchiseOfflinePaymentPayload = {
+  amount: number;
+  paid_at: string;
+  payment_method: FranchisePaymentMethod;
+  reference_number?: string | null;
+  notes?: string | null;
+};
+
 export type LaunchChecklistItem = {
   id: string;
   item_key: string;
@@ -106,6 +116,8 @@ export type FranchiseWritePayload = {
   name: string;
   code?: string | null;
   owner_email?: string | null;
+  owner_full_name?: string | null;
+  owner_phone?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;

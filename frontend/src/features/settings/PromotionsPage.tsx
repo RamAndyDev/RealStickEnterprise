@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import {
+  ActionButton,
+  ActionsTd,
+  ActionsTh,
   Badge,
   Button,
   EmptyState,
@@ -14,6 +17,7 @@ import {
 import { listFranchises } from '../../lib/franchisesApi';
 import { createPromotion, listPromotions, updatePromotion } from '../../lib/settingsApi';
 import type { Promotion, PromotionWritePayload } from '../../types/settings';
+import { validateDateRange, validateRequiredText } from '../../lib/validation';
 import { apiErrorMessage, formatDate } from '../franchises/status';
 
 type FormValues = {
@@ -55,6 +59,7 @@ export function PromotionsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Promotion | null>(null);
   const [form, setForm] = useState<FormValues>(emptyForm());
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,7 +154,7 @@ export function PromotionsPage() {
                 <th className="px-4 py-3 font-semibold">Franchises</th>
                 <th className="px-4 py-3 font-semibold">Validity</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
+                <ActionsTh />
               </tr>
             </thead>
             <tbody>
@@ -175,41 +180,38 @@ export function PromotionsPage() {
                       {item.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setForm({
-                            name: item.name,
-                            description: item.description ?? '',
-                            promo_code: item.promo_code,
-                            valid_from: item.valid_from ? item.valid_from.slice(0, 10) : '',
-                            valid_to: item.valid_to ? item.valid_to.slice(0, 10) : '',
-                            is_active: item.is_active,
-                            franchise_ids: item.franchise_ids,
-                          });
-                          setEditTarget(item);
-                          setError(null);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={item.is_active ? 'muted' : 'outline'}
-                        onClick={() =>
-                          updateMutation.mutate({
-                            id: item.id,
-                            payload: { is_active: !item.is_active },
-                          })
-                        }
-                      >
-                        {item.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                    </div>
-                  </td>
+                  <ActionsTd>
+                    <ActionButton
+                      variant="outline"
+                      onClick={() => {
+                        setForm({
+                          name: item.name,
+                          description: item.description ?? '',
+                          promo_code: item.promo_code,
+                          valid_from: item.valid_from ? item.valid_from.slice(0, 10) : '',
+                          valid_to: item.valid_to ? item.valid_to.slice(0, 10) : '',
+                          is_active: item.is_active,
+                          franchise_ids: item.franchise_ids,
+                        });
+                        setEditTarget(item);
+                        setError(null);
+                      }}
+                    >
+                      Edit
+                    </ActionButton>
+                    <ActionButton
+                      fit="status"
+                      variant={item.is_active ? 'muted' : 'outline'}
+                      onClick={() =>
+                        updateMutation.mutate({
+                          id: item.id,
+                          payload: { is_active: !item.is_active },
+                        })
+                      }
+                    >
+                      {item.is_active ? 'Deactivate' : 'Activate'}
+                    </ActionButton>
+                  </ActionsTd>
                 </tr>
               ))}
             </tbody>
@@ -230,7 +232,13 @@ export function PromotionsPage() {
               <ErrorBanner message={error} />
             </div>
           ) : null}
-          <Field label="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Field
+            label="Name"
+            required
+            value={form.name}
+            error={formErrors.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
           <Field
             label="Description"
             value={form.description}
@@ -240,18 +248,21 @@ export function PromotionsPage() {
             label="Promo code"
             required
             value={form.promo_code}
+            error={formErrors.promo_code}
             onChange={(e) => setForm({ ...form, promo_code: e.target.value })}
           />
           <Field
             label="Valid from"
             type="date"
             value={form.valid_from}
+            error={formErrors.valid_from}
             onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
           />
           <Field
             label="Valid to"
             type="date"
             value={form.valid_to}
+            error={formErrors.valid_to}
             onChange={(e) => setForm({ ...form, valid_to: e.target.value })}
           />
           <fieldset className="mb-3">
@@ -299,6 +310,16 @@ export function PromotionsPage() {
             <Button
               disabled={createMutation.isPending || updateMutation.isPending}
               onClick={() => {
+                const errors: Record<string, string> = {};
+                const nameError = validateRequiredText(form.name, 'Name is required.');
+                const codeError = validateRequiredText(form.promo_code, 'Promo code is required.');
+                if (nameError) errors.name = nameError;
+                if (codeError) errors.promo_code = codeError;
+                const range = validateDateRange(form.valid_from, form.valid_to);
+                if (range.start) errors.valid_from = range.start;
+                if (range.end) errors.valid_to = range.end;
+                setFormErrors(errors);
+                if (Object.keys(errors).length) return;
                 if (editTarget) {
                   updateMutation.mutate({ id: editTarget.id, payload: toPayload(form) });
                 } else {

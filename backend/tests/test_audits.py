@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import uuid4
 
+import pytest
+
 from app.modules.audits.service import FRANCHISE_OPERATIONAL_CHECKLIST
 from app.modules.reports.dates import utc_today
 from tests.conftest import ADMIN_ID, EMPLOYEE_ID, FRANCHISE_A, FRANCHISE_B, OWNER_ID
@@ -45,6 +47,17 @@ def _create_payload(**overrides) -> dict:
     }
     payload.update(overrides)
     return payload
+
+
+@pytest.fixture(autouse=True)
+def enable_franchise_owner_audit(client, auth_header_factory):
+    """Audit business-logic tests assume Admin has enabled Franchise Owner access."""
+    response = client.patch(
+        '/api/v1/admin/settings/franchise-audit',
+        headers=_admin(auth_header_factory),
+        json={'franchise_owner_audit_enabled': True},
+    )
+    assert response.status_code == 200, response.text
 
 
 def _create(client, headers, **overrides) -> dict:

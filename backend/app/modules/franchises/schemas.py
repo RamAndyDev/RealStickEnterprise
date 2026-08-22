@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
+OWNER_EMAIL_EXISTS_DETAIL = 'Email already exists. Please use a different email address.'
+
 
 def _normalize_email(value: object) -> str | None:
     if value is None:
@@ -170,6 +172,8 @@ class FranchiseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     code: str | None = Field(default=None, max_length=50)
     owner_email: str | None = None
+    owner_full_name: str | None = Field(default=None, max_length=200)
+    owner_phone: str | None = Field(default=None, max_length=40)
     address: str | None = Field(default=None, max_length=500)
     city: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, max_length=120)
@@ -193,6 +197,11 @@ class FranchiseCreate(BaseModel):
     def strip_optional(cls, value: object) -> str | None:
         return _strip_text(value)
 
+    @field_validator('owner_full_name', 'owner_phone', mode='before')
+    @classmethod
+    def strip_owner_optional(cls, value: object) -> str | None:
+        return _strip_text(value)
+
     @field_validator('owner_email', mode='before')
     @classmethod
     def validate_owner_email(cls, value: object) -> str | None:
@@ -204,6 +213,21 @@ class FranchiseCreate(BaseModel):
         if value not in FRANCHISE_TIERS:
             raise ValueError(f'tier must be one of: {", ".join(sorted(FRANCHISE_TIERS))}')
         return value
+
+    @model_validator(mode='after')
+    def require_owner_email_when_creating_owner(self) -> FranchiseCreate:
+        if self.owner_full_name and not self.owner_email:
+            raise ValueError('Owner email is required')
+        return self
+
+    def owner_create_payload(self) -> FranchiseOwnerCreate | None:
+        if not self.owner_full_name:
+            return None
+        return FranchiseOwnerCreate(
+            full_name=self.owner_full_name,
+            email=self.owner_email or '',
+            phone=self.owner_phone,
+        )
 
 
 class FranchiseUpdate(BaseModel):

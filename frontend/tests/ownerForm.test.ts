@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   OWNER_CREATE_FALLBACK,
+  OWNER_EMAIL_EXISTS,
   OWNER_FIELD_ERROR,
   applyOwnerCreateResult,
   classifyOwnerCreateError,
@@ -130,14 +131,25 @@ describe('owner create API error mapping', () => {
     const classified = classifyOwnerCreateError(
       axiosLikeError({
         status: 409,
+        detail: OWNER_EMAIL_EXISTS,
+      }),
+    );
+    assert.equal(classified.fieldErrors.email, OWNER_EMAIL_EXISTS);
+    assert.equal(classified.formError, null);
+    assert.equal(classified.fieldErrors.email.toLowerCase().includes('assign'), false);
+  });
+
+  it('does not suggest assigning an existing owner for a duplicate email', () => {
+    const classified = classifyOwnerCreateError(
+      axiosLikeError({
+        status: 409,
         detail: 'An auth user with this email already exists. Use assign owner instead.',
       }),
     );
-    assert.equal(
-      classified.fieldErrors.email,
-      'An auth user with this email already exists. Use assign owner instead.',
-    );
+    assert.equal(classified.fieldErrors.email, OWNER_EMAIL_EXISTS);
     assert.equal(classified.formError, null);
+    assert.equal(/assign/i.test(classified.fieldErrors.email ?? ''), false);
+    assert.equal(OWNER_EMAIL_EXISTS, 'Email already exists. Please use a different email address.');
   });
 
   it('does not expose raw HTTP, Axios, SQL, or URL details', () => {
@@ -274,7 +286,7 @@ describe('Franchise owner creation dialog', () => {
     assert.equal(successBlock.includes('setFeedback(data.message)'), true);
     assert.equal(errorBlock.includes('setOwnerTarget(null)'), false);
     assert.equal(errorBlock.includes('setError('), false);
-    assert.equal(franchisesPage.includes('{error && !ownerTarget ? ('), true);
+    assert.equal(franchisesPage.includes('{error && !ownerTarget && !showAdd ? ('), true);
   });
 
   it('preserves launch progress, offline payment, and payment history UI', () => {
@@ -282,6 +294,18 @@ describe('Franchise owner creation dialog', () => {
     assert.equal(franchisesPage.includes('LaunchProgressDots'), true);
     assert.equal(franchisesPage.includes('RecordOfflinePaymentDialog'), false);
     assert.equal(franchisesPage.includes('PaymentHistorySection'), false);
+  });
+
+  it('keeps the franchise owner action labelled Create Owner and has no Assign Existing workflow', () => {
+    assert.equal(franchisesPage.includes('Create Owner'), true);
+    assert.match(
+      franchisesPage,
+      /resetOwnerForm\(item\)\}>\s*Create Owner\s*<\/ActionButton>/,
+    );
+    assert.equal(franchisesPage.includes('Assign Existing'), false);
+    assert.equal(franchisesPage.includes('Assign Franchise Owner'), false);
+    assert.equal(franchisesPage.includes('ownerMode'), false);
+    assert.equal(franchisesPage.includes('assignFranchiseOwner'), false);
   });
 });
 

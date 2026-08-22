@@ -61,10 +61,10 @@ def get_franchise(
 @router.post('/franchises', response_model=FranchiseDetail, status_code=201)
 def create_franchise(
     body: FranchiseCreate,
-    _: SystemAdmin,
+    profile: SystemAdmin,
     service: FranchiseService = Depends(get_franchise_service),
 ) -> FranchiseDetail:
-    return service.create_franchise(body)
+    return service.create_franchise(body, actor=profile)
 
 
 @router.patch('/franchises/{franchise_id}', response_model=FranchiseDetail)

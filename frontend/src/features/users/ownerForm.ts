@@ -1,6 +1,7 @@
 import type { UserRole } from '../../types/auth';
 
 export const OWNER_CREATE_FALLBACK = 'Unable to create owner. Please try again.';
+export const OWNER_EMAIL_EXISTS = 'Email already exists. Please use a different email address.';
 
 export const OWNER_FIELD_ERROR = {
   nameRequired: 'Name is required.',
@@ -155,10 +156,20 @@ function fieldFromMessage(message: string): keyof OwnerCreateFieldErrors | null 
   return null;
 }
 
+function rewriteOwnerEmailConflict(message: string): string {
+  const lower = message.toLowerCase();
+  if (!lower.includes('email') || !lower.includes('already exists')) return message;
+  if (lower.includes('assign') || lower.includes('auth user with this email')) {
+    return OWNER_EMAIL_EXISTS;
+  }
+  return message;
+}
+
 function safeMessage(raw: string, fallback = OWNER_CREATE_FALLBACK): string {
   const cleaned = cleanValidationMsg(raw);
   if (!cleaned || isUnsafeOwnerMessage(cleaned)) return fallback;
-  return cleaned.endsWith('.') ? cleaned : `${cleaned}.`;
+  const rewritten = rewriteOwnerEmailConflict(cleaned);
+  return rewritten.endsWith('.') ? rewritten : `${rewritten}.`;
 }
 
 export function classifyOwnerCreateError(

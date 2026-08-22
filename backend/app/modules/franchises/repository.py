@@ -90,6 +90,14 @@ class FranchiseRepository:
             raise RuntimeError('Franchise insert returned no data')
         return rows[0]
 
+    def delete_new_franchise(self, franchise_id: UUID) -> None:
+        """Remove a just-created franchise and its seeded checklist (FK children first)."""
+        self._db.table('launch_checklist_items').delete().eq(
+            'franchise_id',
+            str(franchise_id),
+        ).execute()
+        self._db.table('franchises').delete().eq('id', str(franchise_id)).execute()
+
     def update_franchise(self, franchise_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
         response = (
             self._db.table('franchises')

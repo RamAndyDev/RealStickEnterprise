@@ -10,6 +10,7 @@ from app.core.security import CurrentProfile
 from app.modules.auth.provisioning import provision_auth_user
 from app.modules.franchises.repository import FranchiseRepository
 from app.modules.franchises.schemas import (
+    OWNER_EMAIL_EXISTS_DETAIL,
     FranchiseApplicationSummary,
     FranchiseCreate,
     FranchiseDetail,
@@ -103,7 +104,20 @@ class FranchiseService:
             launch_checklist=[LaunchChecklistItem.model_validate(i) for i in checklist],
         )
 
-    def create_franchise(self, data: FranchiseCreate) -> FranchiseDetail:
+    def create_franchise(
+        self,
+        data: FranchiseCreate,
+        actor: CurrentProfile | None = None,
+    ) -> FranchiseDetail:
+        owner_payload = data.owner_create_payload()
+        if owner_payload:
+            if actor is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Unable to create franchise owner',
+                )
+            self._reject_existing_owner_email(owner_payload.email)
+
         if data.code:
             existing = self.repo.get_franchise_by_code(data.code)
             if existing:
@@ -145,8 +159,23 @@ class FranchiseService:
             ) from exc
 
         franchise_id = UUID(str(created['id']))
-        self.repo.seed_default_checklist(franchise_id)
-        return self.get_franchise(franchise_id)
+        if not owner_payload:
+            self.repo.seed_default_checklist(franchise_id)
+            return self.get_franchise(franchise_id)
+
+        try:
+            self.repo.seed_default_checklist(franchise_id)
+            created_owner = self.create_owner(franchise_id, owner_payload, actor)
+            return created_owner.franchise
+        except HTTPException:
+            self._rollback_new_franchise(franchise_id)
+            raise
+        except Exception as exc:
+            self._rollback_new_franchise(franchise_id)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Unable to create franchise',
+            ) from exc
 
     def update_franchise(self, franchise_id: UUID, data: FranchiseUpdate) -> FranchiseDetail:
         existing = self.repo.get_franchise(franchise_id)
@@ -259,19 +288,14 @@ class FranchiseService:
         if not franchise:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Franchise not found')
 
-        existing_auth_id = self.repo.find_auth_user_id_by_email(data.email)
-        if existing_auth_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail='An auth user with this email already exists. Use assign owner instead.',
-            )
+        self._reject_existing_owner_email(data.email)
 
         provisioned = provision_auth_user(
             self.repo,
             email=data.email,
             full_name=data.full_name,
             created_label='Franchise owner created',
-            existing_conflict_detail='An auth user with this email already exists. Use assign owner instead.',
+            existing_conflict_detail=OWNER_EMAIL_EXISTS_DETAIL,
         )
         auth_user_id = provisioned.auth_user_id
         password_setup = provisioned.password_setup
@@ -325,6 +349,19 @@ class FranchiseService:
             password_setup=password_setup,
             message=message,
         )
+
+    def _reject_existing_owner_email(self, email: str) -> None:
+        if self.repo.find_auth_user_id_by_email(email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=OWNER_EMAIL_EXISTS_DETAIL,
+            )
+
+    def _rollback_new_franchise(self, franchise_id: UUID) -> None:
+        try:
+            self.repo.delete_new_franchise(franchise_id)
+        except Exception:
+            pass
 
     def _validate_assignable_profile(self, profile: dict, franchise_id: UUID) -> None:
         try:

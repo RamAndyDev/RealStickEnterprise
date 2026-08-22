@@ -1,5 +1,6 @@
 from uuid import uuid4
 
+from app.modules.franchises.schemas import OWNER_EMAIL_EXISTS_DETAIL
 from tests.conftest import (
     ADMIN_ID,
     EMPLOYEE_ID,
@@ -44,6 +45,124 @@ def test_admin_can_create_franchise(client, auth_header_factory):
     assert body['status'] == 'SETUP'
     assert body['launch_progress_total'] >= 1
     assert len(body['launch_checklist']) >= 1
+
+
+def test_admin_can_create_franchise_with_new_owner(client, auth_header_factory, fake_db):
+    before_ids = {row['id'] for row in fake_db.tables['franchises']}
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Kondapur Outlet',
+            'city': 'Hyderabad',
+            'owner_full_name': 'Kondapur Owner',
+            'owner_email': 'kondapur.owner@realstick.in',
+            'owner_phone': '9876543210',
+            'tier': 'Founder',
+            'code': 'KOND-01',
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body['name'] == 'Kondapur Outlet'
+    assert body['owner_email'] == 'kondapur.owner@realstick.in'
+    assert body['owner'] is not None
+    assert body['owner']['full_name'] == 'Kondapur Owner'
+    assert body['owner']['is_active'] is True
+
+    created_ids = {row['id'] for row in fake_db.tables['franchises']} - before_ids
+    assert created_ids == {body['id']}
+    profile = next(p for p in fake_db.tables['profiles'] if p['id'] == body['owner']['id'])
+    assert profile['role'] == 'FRANCHISE_OWNER'
+    assert profile['franchise_id'] == body['id']
+    assert any(u.email == 'kondapur.owner@realstick.in' for u in fake_db.auth.admin._users)
+
+
+def test_duplicate_owner_email_does_not_create_franchise(client, auth_header_factory, fake_db):
+    before_franchises = list(fake_db.tables['franchises'])
+    before_profiles = list(fake_db.tables['profiles'])
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Orphan Risk Outlet',
+            'owner_full_name': 'Existing Email Owner',
+            'owner_email': 'owner@realstick.in',
+            'code': 'ORPHAN-01',
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()['detail'] == OWNER_EMAIL_EXISTS_DETAIL
+    assert 'assign' not in response.json()['detail'].lower()
+    assert fake_db.tables['franchises'] == before_franchises
+    assert not any(row.get('name') == 'Orphan Risk Outlet' for row in fake_db.tables['franchises'])
+    assert not any(row.get('code') == 'ORPHAN-01' for row in fake_db.tables['franchises'])
+    assert fake_db.tables['profiles'] == before_profiles
+
+
+def test_owner_create_failure_rolls_back_new_franchise(client, auth_header_factory, fake_db, monkeypatch):
+    from fastapi import HTTPException
+
+    from app.modules.franchises.service import FranchiseService
+
+    def fail_owner(self, franchise_id, data, actor):
+        raise HTTPException(status_code=400, detail='Unable to create franchise owner profile')
+
+    monkeypatch.setattr(FranchiseService, 'create_owner', fail_owner)
+    before_franchises = list(fake_db.tables['franchises'])
+    response = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Rollback Outlet',
+            'owner_full_name': 'Rollback Owner',
+            'owner_email': 'rollback.owner@realstick.in',
+            'code': 'ROLLBACK-01',
+        },
+    )
+    assert response.status_code == 400
+    assert not any(row.get('name') == 'Rollback Outlet' for row in fake_db.tables['franchises'])
+    assert not any(row.get('code') == 'ROLLBACK-01' for row in fake_db.tables['franchises'])
+    assert fake_db.tables['franchises'] == before_franchises
+
+
+def test_failed_owner_create_then_retry_creates_exactly_one_outlet(client, auth_header_factory, fake_db):
+    before_ids = {row['id'] for row in fake_db.tables['franchises']}
+    failed = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Retry Outlet',
+            'owner_full_name': 'Retry Owner',
+            'owner_email': 'owner@realstick.in',
+            'code': 'RETRY-01',
+        },
+    )
+    assert failed.status_code == 409
+    assert {row['id'] for row in fake_db.tables['franchises']} == before_ids
+
+    retry = client.post(
+        '/api/v1/admin/franchises',
+        headers=auth_header_factory(ADMIN_ID, 'admin@realstick.in'),
+        json={
+            'name': 'Retry Outlet',
+            'owner_full_name': 'Retry Owner',
+            'owner_email': 'retry.owner@realstick.in',
+            'code': 'RETRY-01',
+        },
+    )
+    assert retry.status_code == 201
+    body = retry.json()
+    created_ids = {row['id'] for row in fake_db.tables['franchises']} - before_ids
+    assert created_ids == {body['id']}
+    assert body['owner']['full_name'] == 'Retry Owner'
+    assert body['owner_email'] == 'retry.owner@realstick.in'
+    owners = [
+        p
+        for p in fake_db.tables['profiles']
+        if p.get('franchise_id') == body['id'] and p.get('role') == 'FRANCHISE_OWNER' and p.get('is_active')
+    ]
+    assert len(owners) == 1
 
 
 def test_admin_can_create_franchise_owner(client, auth_header_factory, fake_db):
@@ -144,6 +263,8 @@ def test_duplicate_or_invalid_owner_create_handled(client, auth_header_factory):
         json={'full_name': 'Existing', 'email': 'owner@realstick.in'},
     )
     assert duplicate.status_code == 409
+    assert duplicate.json()['detail'] == 'Email already exists. Please use a different email address.'
+    assert 'assign' not in duplicate.json()['detail'].lower()
 
 
 def test_create_owner_reassignment_deactivates_previous(client, auth_header_factory, fake_db):

@@ -116,6 +116,8 @@ export type FranchiseWritePayload = {
   name: string;
   code?: string | null;
   owner_email?: string | null;
+  owner_full_name?: string | null;
+  owner_phone?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;

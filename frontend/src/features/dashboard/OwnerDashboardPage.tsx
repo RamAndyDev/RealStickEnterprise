@@ -28,7 +28,7 @@ export function OwnerDashboardPage() {
 
       {data ? (
         <>
-          <div className="mb-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
             <StatCard label="Today's Revenue" value={formatINR(data.today_revenue)} color="green" />
             <StatCard label="Bills Today" value={data.bills_today} color="orange" />
             <StatCard label="Top Product" value={data.top_product_name ?? '—'} color="mint" />

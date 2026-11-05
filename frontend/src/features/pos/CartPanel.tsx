@@ -50,7 +50,7 @@ export function CartPanel({
   const totals = previewTotals(lines, discountPercent, gstRate);
 
   return (
-    <aside className="flex max-h-[46vh] w-full flex-col overflow-hidden border-t border-[#E0DDD5] bg-white lg:max-h-none lg:h-full lg:w-[320px] lg:shrink-0 lg:border-l lg:border-t-0">
+    <aside className="flex max-h-[46vh] w-full flex-col overflow-hidden border-t border-[#E0DDD5] bg-white md:max-h-none md:h-full md:w-[280px] md:shrink-0 md:border-l md:border-t-0 lg:w-[320px]">
       <div className="shrink-0 bg-[#0D4F2E] px-3.5 py-3 text-white">
         <div className="flex items-center justify-between gap-2">
           <div className="text-[13px] font-bold">Current Bill</div>

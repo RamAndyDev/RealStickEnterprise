@@ -39,8 +39,8 @@ export function ListToolbar({
   filters?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center">
-      <div className="relative lg:flex-1">
+    <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center">
+      <div className="relative md:flex-1">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8A8A84]"
           aria-hidden="true"
@@ -53,7 +53,7 @@ export function ListToolbar({
           className="w-full rounded-lg border border-[#E0DDD5] bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#1A7A4A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A7A4A]"
         />
       </div>
-      {filters ? <div className="flex flex-wrap items-center gap-2 lg:shrink-0">{filters}</div> : null}
+      {filters ? <div className="flex flex-wrap items-center gap-2 md:shrink-0">{filters}</div> : null}
     </div>
   );
 }

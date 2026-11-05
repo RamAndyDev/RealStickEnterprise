@@ -281,7 +281,7 @@ export function MenuPage() {
           </Button>
         </div>
         <div className="overflow-x-auto rounded-[10px] border border-[#E0DDD5] bg-white">
-          <table className="w-full min-w-[40rem] table-fixed text-sm">
+          <table className="w-full table-fixed text-sm">
             <colgroup>
               <col />
               <col className="w-32" />

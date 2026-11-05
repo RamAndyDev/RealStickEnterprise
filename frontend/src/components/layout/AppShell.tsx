@@ -83,12 +83,12 @@ export function AppShell() {
     <div
       className={
         isPos
-          ? 'flex h-dvh flex-col overflow-hidden bg-[#FDFAF4] lg:flex-row'
+          ? 'flex h-dvh flex-col overflow-hidden bg-[#FDFAF4] md:flex-row'
           : 'min-h-dvh bg-[#FDFAF4] md:flex md:h-dvh md:overflow-hidden'
       }
     >
       {isPos ? (
-        <header className="flex shrink-0 items-center gap-3 bg-[#0D4F2E] px-3 py-2 text-white lg:hidden">
+        <header className="flex shrink-0 items-center gap-3 bg-[#0D4F2E] px-3 py-2 text-white md:hidden">
           <button
             type="button"
             className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg"
@@ -106,7 +106,7 @@ export function AppShell() {
       {isPos && drawerOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
           aria-label="Close navigation"
           onClick={() => setDrawerOpen(false)}
         />
@@ -116,7 +116,7 @@ export function AppShell() {
         id={isPos ? drawerId : undefined}
         className={
           isPos
-            ? `fixed inset-y-0 left-0 z-40 flex h-dvh max-h-dvh w-60 flex-col bg-[#0D4F2E] text-white transition-transform lg:static lg:h-full lg:max-h-none lg:translate-x-0 ${
+            ? `fixed inset-y-0 left-0 z-40 flex h-dvh max-h-dvh w-60 flex-col bg-[#0D4F2E] text-white transition-transform md:static md:h-full md:max-h-none md:translate-x-0 ${
                 drawerOpen ? 'translate-x-0' : '-translate-x-full'
               }`
             : `flex w-full flex-col bg-[#0D4F2E] text-white md:h-full md:w-60 md:shrink-0`

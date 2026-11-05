@@ -152,7 +152,7 @@ export function ReportsPage() {
 
       {!loading && !error && summary ? (
         <>
-          <div className="mb-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
             <StatCard label="Revenue" value={formatINR(summary.revenue)} color="green" />
             <StatCard label="Orders" value={summary.orders} color="orange" />
             <StatCard label="Avg Order" value={formatINR(summary.avg_order)} color="navy" />

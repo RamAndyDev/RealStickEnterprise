@@ -65,7 +65,7 @@ export function DailySalesPage() {
 
       {data ? (
         <>
-          <div className="mb-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
             <StatCard label="Revenue" value={formatINR(data.summary.revenue)} color="green" />
             <StatCard label="Bills" value={data.summary.bills} color="orange" />
             <StatCard label="Items Sold" value={data.summary.items_sold} color="mint" />

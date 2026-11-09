@@ -69,7 +69,8 @@ export function CartPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-1.5">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5">
+        <div className="py-1.5">
         {!lines.length ? (
           <div className="px-3.5 py-7 text-center text-[#8A8A84]">
             <div className="mb-1 text-[26px]">🍡</div>
@@ -117,15 +118,15 @@ export function CartPanel({
             </button>
           </div>
         ))}
-      </div>
+        </div>
 
-      <div className="min-h-0 max-h-[75%] shrink-0 overflow-y-auto overscroll-contain border-t border-[#E0DDD5] px-2.5 pb-2.5 pt-2">
+        <div className="border-t border-[#E0DDD5] px-2.5 pb-2.5 pt-2">
         {offers.length ? (
           <>
             <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[.06em] text-[#8A8A84]">
               Available Offers
             </div>
-            <div className="mb-2 max-h-24 space-y-1.5 overflow-y-auto overscroll-contain md:max-h-12">
+            <div className="mb-2 space-y-1.5">
               {offers.map((offer) => {
                 const selected = selectedOfferId === offer.id;
                 return (
@@ -248,6 +249,7 @@ export function CartPanel({
         >
           🖨️ Bill & Print Receipt
         </Button>
+        </div>
       </div>
     </aside>
   );

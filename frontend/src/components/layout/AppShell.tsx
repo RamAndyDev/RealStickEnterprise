@@ -20,12 +20,11 @@ export function AppShell() {
   }, [pathname]);
 
   useEffect(() => {
-    if (!isPos) return undefined;
-
     const htmlStyle = document.documentElement.style;
     const bodyStyle = document.body.style;
     const previousHtml = {
       height: htmlStyle.height,
+      minHeight: htmlStyle.minHeight,
       overflow: htmlStyle.overflow,
     };
     const previousBody = {
@@ -34,20 +33,24 @@ export function AppShell() {
       overflow: bodyStyle.overflow,
     };
 
-    htmlStyle.height = '100dvh';
+    htmlStyle.height = '100vh';
+    if (CSS.supports('height', '100dvh')) htmlStyle.height = '100dvh';
+    htmlStyle.minHeight = '0';
     htmlStyle.overflow = 'hidden';
-    bodyStyle.height = '100dvh';
+    bodyStyle.height = '100vh';
+    if (CSS.supports('height', '100dvh')) bodyStyle.height = '100dvh';
     bodyStyle.minHeight = '0';
     bodyStyle.overflow = 'hidden';
 
     return () => {
       htmlStyle.height = previousHtml.height;
+      htmlStyle.minHeight = previousHtml.minHeight;
       htmlStyle.overflow = previousHtml.overflow;
       bodyStyle.height = previousBody.height;
       bodyStyle.minHeight = previousBody.minHeight;
       bodyStyle.overflow = previousBody.overflow;
     };
-  }, [isPos]);
+  }, []);
 
   useEffect(() => {
     if (!drawerOpen) return undefined;
@@ -63,7 +66,7 @@ export function AppShell() {
       className={
         isPos
           ? 'scrollbar-hidden min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3'
-          : 'scrollbar-hidden space-y-1 p-3 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain'
+          : 'scrollbar-hidden min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3'
       }
     >
       {items.map((item) => (
@@ -113,8 +116,8 @@ export function AppShell() {
     <div
       className={
         isPos
-          ? 'flex h-[100vh] h-dvh flex-col overflow-hidden overscroll-none bg-[#FDFAF4] md:flex-row'
-          : 'min-h-dvh bg-[#FDFAF4] md:flex md:h-dvh md:overflow-hidden'
+          ? 'flex h-[100vh] h-dvh min-h-0 flex-col overflow-hidden overscroll-none bg-[#FDFAF4] md:flex-row'
+          : 'flex h-[100vh] h-dvh min-h-0 flex-col overflow-hidden overscroll-none bg-[#FDFAF4] md:flex-row'
       }
     >
       {isPos ? (
@@ -149,7 +152,7 @@ export function AppShell() {
             ? `fixed inset-y-0 left-0 z-40 flex h-[100vh] h-dvh max-h-dvh w-60 flex-col bg-[#0D4F2E] text-white transition-transform md:static md:h-full md:max-h-none md:w-44 md:shrink-0 md:translate-x-0 lg:w-52 xl:w-60 ${
                 drawerOpen ? 'translate-x-0' : '-translate-x-full'
               }`
-            : `flex w-full flex-col bg-[#0D4F2E] text-white md:h-full md:w-60 md:shrink-0`
+            : `flex w-full min-h-0 flex-col bg-[#0D4F2E] text-white md:h-full md:w-60 md:shrink-0`
         }
       >
         <div className="shrink-0 border-b border-white/10 px-5 py-5">
@@ -166,7 +169,7 @@ export function AppShell() {
         className={
           isPos
             ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
-            : 'min-w-0 flex-1 p-5 md:min-h-0 md:overflow-y-auto md:p-8'
+            : 'min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-5 md:p-8'
         }
       >
         <Outlet />

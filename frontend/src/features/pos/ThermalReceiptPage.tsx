@@ -90,20 +90,22 @@ export function ThermalReceiptPage() {
       </div>
 
       <div className="thermal-receipt mx-auto">
-        <div className="center">
+        <div className="center receipt-header">
           <div className="brand">RealStick™</div>
-          <div>Natural Popsicles & Kulfi</div>
-          <div>{order.franchise_name || 'Outlet'}</div>
-          {address ? <div>{address}</div> : null}
-          <div>realstick.in</div>
+          <div className="business-subtitle">Natural Popsicles & Kulfi</div>
+          <div className="store-detail">{order.franchise_name || 'Outlet'}</div>
+          {address ? <div className="store-detail">{address}</div> : null}
+          <div className="store-detail website">realstick.in</div>
         </div>
         <hr />
-        <div>Bill No: {order.bill_number}</div>
-        <div>Date: {formatDate(when)}</div>
-        <div>Time: {formatTime(when)}</div>
-        <div>Staff: {order.cashier_name || '—'}</div>
+        <div className="bill-details">
+          <div>Bill No: {order.bill_number}</div>
+          <div>Date: {formatDate(when)}</div>
+          <div>Time: {formatTime(when)}</div>
+          <div>Staff: {order.cashier_name || '—'}</div>
+        </div>
         <hr />
-        <table>
+        <table className="items-table">
           <thead>
             <tr>
               <th>Item</th>
@@ -115,7 +117,7 @@ export function ThermalReceiptPage() {
           <tbody>
             {order.items.map((item) => (
               <tr key={`${item.product_id}-${item.quantity}-${item.line_total}`}>
-                <td>{item.product_name_snapshot}</td>
+                <td className="item-name">{item.product_name_snapshot}</td>
                 <td className="qty">×{item.quantity}</td>
                 <td className="num">{formatINR(item.unit_price)}</td>
                 <td className="num">{formatINR(item.line_total)}</td>

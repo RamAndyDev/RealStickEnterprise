@@ -24,15 +24,27 @@ describe('thermal receipt print readability', () => {
     assert.match(receiptPage, /Payment Status/);
   });
 
-  it('uses high contrast and retains bold hierarchy for print', () => {
-    assert.match(receiptCss, /\.thermal-receipt thead th\s*\{\s*font-weight:\s*700;/);
-    assert.match(receiptCss, /\.thermal-receipt \.total td\s*\{[^}]*font-weight:\s*700/s);
-    assert.match(receiptCss, /\.thermal-receipt \.footer\s*\{[^}]*color:\s*#111/s);
+  it('uses a high-contrast sans-serif type hierarchy', () => {
+    assert.match(receiptCss, /font-family:\s*Arial, Helvetica, sans-serif/);
+    assert.match(receiptCss, /\.thermal-receipt \.brand\s*\{[^}]*font-size:\s*22px;[^}]*font-weight:\s*800/s);
+    assert.match(receiptCss, /\.thermal-receipt thead th\s*\{\s*font-weight:\s*800;/);
+    assert.match(receiptCss, /\.thermal-receipt \.total td\s*\{[^}]*font-weight:\s*800;[^}]*font-size:\s*18px/s);
+    assert.match(receiptCss, /\.thermal-receipt \.footer\s*\{[^}]*font-size:\s*11px;[^}]*color:\s*#000/s);
     assert.match(receiptCss, /-webkit-print-color-adjust:\s*exact/);
     assert.match(receiptCss, /print-color-adjust:\s*exact/);
-    assert.match(receiptCss, /\.thermal-receipt hr\s*\{[^}]*border-top:\s*1px dashed #555/s);
-    assert.match(receiptCss, /\.thermal-receipt \.brand,\s*\.thermal-receipt \.footer\s*\{\s*color:\s*#000 !important;/);
-    assert.match(receiptCss, /\.thermal-receipt hr\s*\{\s*border-top-color:\s*#000;/);
+    assert.match(receiptCss, /\.thermal-receipt hr\s*\{[^}]*border-top:\s*1px dashed #000/s);
+    assert.match(receiptCss, /\.thermal-receipt \.total td\s*\{[^}]*border-top:\s*2px solid #000/s);
+    assert.match(receiptCss, /\.thermal-receipt,\s*\.thermal-receipt \*\s*\{\s*color:\s*#000 !important;/);
+  });
+
+  it('keeps long item names in a bounded, wrapping table column', () => {
+    assert.match(receiptPage, /<table className="items-table">/);
+    assert.match(receiptPage, /<td className="item-name">\{item\.product_name_snapshot\}<\/td>/);
+    assert.match(receiptCss, /\.thermal-receipt \.items-table th:first-child,\s*\.thermal-receipt \.items-table \.item-name\s*\{[^}]*width:\s*44%;[^}]*overflow-wrap:\s*anywhere/s);
+    assert.match(receiptCss, /\.thermal-receipt \.items-table \.qty\s*\{[^}]*text-align:\s*center/s);
+    assert.match(receiptCss, /\.thermal-receipt \.num\s*\{[^}]*text-align:\s*right;[^}]*white-space:\s*nowrap/s);
+    assert.match(receiptCss, /\.thermal-receipt table\s*\{[^}]*width:\s*100%;[^}]*table-layout:\s*fixed/s);
+    assert.match(receiptCss, /\.thermal-receipt\s*\{[^}]*width:\s*80mm;[^}]*max-width:\s*80mm/s);
   });
 
   it('does not introduce printer-density or ESC/POS commands', () => {

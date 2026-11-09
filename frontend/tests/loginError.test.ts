@@ -142,6 +142,23 @@ describe('toLoginErrorMessage', () => {
   });
 });
 
+describe('LoginPage password visibility', () => {
+  it('starts hidden and toggles visibility without replacing the password value', () => {
+    assert.match(loginPage, /const \[passwordVisible, setPasswordVisible\] = useState\(false\)/);
+    assert.match(loginPage, /type=\{passwordVisible \? 'text' : 'password'\}/);
+    assert.match(loginPage, /autoComplete="current-password"/);
+    assert.match(loginPage, /value=\{password\}/);
+    assert.match(loginPage, /setPasswordVisible\(\(visible\) => !visible\)/);
+  });
+
+  it('uses an accessible non-submit toggle with a tablet-friendly target', () => {
+    assert.match(loginPage, /type="button"[\s\S]*aria-label=\{passwordVisible \? 'Hide password' : 'Show password'\}/);
+    assert.match(loginPage, /aria-pressed=\{passwordVisible\}/);
+    assert.match(loginPage, /min-h-11 min-w-11/);
+    assert.match(loginPage, /pr-14/);
+  });
+});
+
 describe('LoginPage error display and retry', () => {
   it('shows mapped errors in the existing login form error area', () => {
     assert.equal(loginPage.includes('toLoginErrorMessage'), true);

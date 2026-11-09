@@ -26,7 +26,7 @@
 
 .thermal-receipt hr {
   border: none;
-  border-top: 1px dashed #ccc;
+  border-top: 1px dashed #555;
   margin: 6px 0;
 }
 
@@ -41,6 +41,10 @@
   padding: 2px 0;
   font-weight: 400;
   text-align: left;
+}
+
+.thermal-receipt thead th {
+  font-weight: 700;
 }
 
 .thermal-receipt .qty {
@@ -60,7 +64,7 @@
 
 .thermal-receipt .footer {
   font-size: 10px;
-  color: #888;
+  color: #111;
 }
 
 @media print {
@@ -91,5 +95,17 @@
     max-width: 80mm;
     margin: 0;
     box-shadow: none;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .thermal-receipt .brand,
+  .thermal-receipt .footer {
+    color: #000 !important;
+  }
+
+  .thermal-receipt hr {
+    border-top-color: #000;
   }
 }

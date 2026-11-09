@@ -20,6 +20,36 @@ export function AppShell() {
   }, [pathname]);
 
   useEffect(() => {
+    if (!isPos) return undefined;
+
+    const htmlStyle = document.documentElement.style;
+    const bodyStyle = document.body.style;
+    const previousHtml = {
+      height: htmlStyle.height,
+      overflow: htmlStyle.overflow,
+    };
+    const previousBody = {
+      height: bodyStyle.height,
+      minHeight: bodyStyle.minHeight,
+      overflow: bodyStyle.overflow,
+    };
+
+    htmlStyle.height = '100dvh';
+    htmlStyle.overflow = 'hidden';
+    bodyStyle.height = '100dvh';
+    bodyStyle.minHeight = '0';
+    bodyStyle.overflow = 'hidden';
+
+    return () => {
+      htmlStyle.height = previousHtml.height;
+      htmlStyle.overflow = previousHtml.overflow;
+      bodyStyle.height = previousBody.height;
+      bodyStyle.minHeight = previousBody.minHeight;
+      bodyStyle.overflow = previousBody.overflow;
+    };
+  }, [isPos]);
+
+  useEffect(() => {
     if (!drawerOpen) return undefined;
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') setDrawerOpen(false);
@@ -83,7 +113,7 @@ export function AppShell() {
     <div
       className={
         isPos
-          ? 'flex h-dvh flex-col overflow-hidden bg-[#FDFAF4] md:flex-row'
+          ? 'flex h-[100vh] h-dvh flex-col overflow-hidden overscroll-none bg-[#FDFAF4] md:flex-row'
           : 'min-h-dvh bg-[#FDFAF4] md:flex md:h-dvh md:overflow-hidden'
       }
     >
@@ -116,7 +146,7 @@ export function AppShell() {
         id={isPos ? drawerId : undefined}
         className={
           isPos
-            ? `fixed inset-y-0 left-0 z-40 flex h-dvh max-h-dvh w-60 flex-col bg-[#0D4F2E] text-white transition-transform md:static md:h-full md:max-h-none md:translate-x-0 ${
+            ? `fixed inset-y-0 left-0 z-40 flex h-[100vh] h-dvh max-h-dvh w-60 flex-col bg-[#0D4F2E] text-white transition-transform md:static md:h-full md:max-h-none md:w-44 md:shrink-0 md:translate-x-0 lg:w-52 xl:w-60 ${
                 drawerOpen ? 'translate-x-0' : '-translate-x-full'
               }`
             : `flex w-full flex-col bg-[#0D4F2E] text-white md:h-full md:w-60 md:shrink-0`

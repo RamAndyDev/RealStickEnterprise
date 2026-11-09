@@ -50,7 +50,7 @@ export function CartPanel({
   const totals = previewTotals(lines, discountPercent, gstRate);
 
   return (
-    <aside className="flex max-h-[46vh] w-full flex-col overflow-hidden border-t border-[#E0DDD5] bg-white md:max-h-none md:h-full md:w-[280px] md:shrink-0 md:border-l md:border-t-0 lg:w-[320px]">
+    <aside className="flex max-h-[46vh] w-full min-h-0 flex-col overflow-hidden border-t border-[#E0DDD5] bg-white md:max-h-none md:h-full md:w-64 md:shrink-0 md:border-l md:border-t-0 lg:w-72 xl:w-80">
       <div className="shrink-0 bg-[#0D4F2E] px-3.5 py-3 text-white">
         <div className="flex items-center justify-between gap-2">
           <div className="text-[13px] font-bold">Current Bill</div>
@@ -119,13 +119,13 @@ export function CartPanel({
         ))}
       </div>
 
-      <div className="shrink-0 border-t border-[#E0DDD5] px-2.5 pb-2.5 pt-2">
+      <div className="min-h-0 max-h-[75%] shrink-0 overflow-y-auto overscroll-contain border-t border-[#E0DDD5] px-2.5 pb-2.5 pt-2">
         {offers.length ? (
           <>
             <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[.06em] text-[#8A8A84]">
               Available Offers
             </div>
-            <div className="mb-2 space-y-1.5">
+            <div className="mb-2 max-h-24 space-y-1.5 overflow-y-auto overscroll-contain md:max-h-12">
               {offers.map((offer) => {
                 const selected = selectedOfferId === offer.id;
                 return (

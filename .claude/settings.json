@@ -1,0 +1,7 @@
+﻿{
+  "env": {
+    "ANTHROPIC_BASE_URL": "omnirout_local_base_url",
+    "ANTHROPIC_AUTH_TOKEN": "omnirout_local_auth_token",
+    "ANTHROPIC_MODEL": "codex/gpt-6-luna"
+  }
+}

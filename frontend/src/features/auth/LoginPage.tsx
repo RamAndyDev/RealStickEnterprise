@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 
 import { RealStickLogo } from '../../components/branding/RealStickLogo';
@@ -16,6 +17,7 @@ export function LoginPage() {
   );
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -75,15 +77,30 @@ export function LoginPage() {
 
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[#8A8A84]">
             Password
-            <input
-              required
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#E0DDD5] px-3 py-3 outline-none focus:border-[#1A7A4A]"
-              placeholder="Enter password"
-            />
+            <span className="relative mt-2 block">
+              <input
+                required
+                type={passwordVisible ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full rounded-lg border border-[#E0DDD5] py-3 pl-3 pr-14 outline-none focus:border-[#1A7A4A]"
+                placeholder="Enter password"
+              />
+              <button
+                type="button"
+                onClick={() => setPasswordVisible((visible) => !visible)}
+                aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+                aria-pressed={passwordVisible}
+                className="absolute inset-y-0 right-0 flex min-h-11 min-w-11 items-center justify-center rounded-r-lg text-[#6F706A] hover:text-[#1A7A4A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#1A7A4A]"
+              >
+                {passwordVisible ? (
+                  <EyeOff size={20} aria-hidden="true" />
+                ) : (
+                  <Eye size={20} aria-hidden="true" />
+                )}
+              </button>
+            </span>
           </label>
 
           <div className="mb-6 text-right">

@@ -146,7 +146,7 @@ export function PromotionsPage() {
 
       {items.length ? (
         <div className="overflow-x-auto rounded-xl border border-[#E0DDD5] bg-white">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead className="border-b border-[#E0DDD5] bg-[#FDFAF4] text-[11px] uppercase tracking-[.06em] text-[#8A8A84]">
               <tr>
                 <th className="px-4 py-3 font-semibold">Promotion</th>

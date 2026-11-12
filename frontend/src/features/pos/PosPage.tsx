@@ -146,14 +146,14 @@ export function PosPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden lg:flex-row">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden md:flex-row">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#FDFAF4]">
         <div className="border-b border-[#E0DDD5] bg-white px-3 py-2.5">
           <input
             placeholder="🔍 Search menu..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="mb-2 w-full rounded-lg border border-[#E0DDD5] px-2.5 py-2.5 text-base outline-none focus:border-[#1A7A4A] lg:py-2 lg:text-[13px]"
+            className="mb-2 w-full rounded-lg border border-[#E0DDD5] px-2.5 py-2.5 text-base outline-none focus:border-[#1A7A4A] md:py-2 md:text-[13px]"
           />
           <div className="flex flex-wrap gap-1.5">
             {chips.map((chip) => {
@@ -167,7 +167,7 @@ export function PosPage() {
                     setCategory(chip);
                     setSearch('');
                   }}
-                  className="min-h-11 rounded-full px-3 text-[13px] font-semibold lg:min-h-0 lg:px-2.5 lg:py-1 lg:text-[11px]"
+                  className="min-h-11 rounded-full px-3 text-[13px] font-semibold md:min-h-0 md:px-2.5 md:py-1 md:text-[11px]"
                   style={{
                     background: selected ? color : 'transparent',
                     color: selected ? '#fff' : '#4A4A46',
@@ -190,7 +190,7 @@ export function PosPage() {
           {items.length && !visible.length ? (
             <div className="px-4 py-10 text-center text-[13px] text-[#8A8A84]">No items found</div>
           ) : null}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-2 lg:grid-cols-[repeat(auto-fill,minmax(135px,1fr))]">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-2 md:grid-cols-[repeat(auto-fill,minmax(135px,1fr))]">
             {visible.map((item) => {
               const color = categoryColor(item.category_name);
               const available = item.available_for_pos;
